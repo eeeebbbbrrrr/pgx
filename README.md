@@ -66,15 +66,33 @@
 
 ## System Requirements
 
-- A Rust toolchain: `rustc`, `cargo`, and `rustfmt`. The recommended way to get these is from https://rustup.rs †
-- `git`
-- `libclang` 5.0 or greater (required by bindgen)
-   - Ubuntu: `apt install libclang-dev` or `apt install clang`
-   - RHEL: `yum install clang`
-- `tar`
-- `bzip2`
-- GCC 7 or newer
-- [PostgreSQL's build dependencies](https://wiki.postgresql.org/wiki/Compile_and_Install_from_source_code) ‡
+In general, a Rust toolchain (`rustc`, `cargo`, and `rustfmt`) is required.
+
+On Debian-based systems, this is the full set of requirements:
+
+To install `cargo-pgrx`:
+
+```
+# curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# sudo apt install build-essential pkg-config libssl-dev
+```
+
+To compile Postgres with `cargo pgrx init`:
+
+```
+# sudo apt install tar bzip2 libicu-dev bison flex libreadline-dev zlib1g-dev
+```
+
+To compile a pgrx-based extension:
+
+```
+# sudo apt install libclang-15-dev
+```
+
+Your Linux (or MacOS) distro will likely have all the above packages but with different names.
+
+Check [PostgreSQL's build dependencies](https://wiki.postgresql.org/wiki/Compile_and_Install_from_source_code) ‡ for 
+specifics if you encounter problems with `cargo pgrx init` compilation Postgres
 
  † PGRX has no MSRV policy, thus may require the latest stable version of Rust, available via Rustup
 
