@@ -441,52 +441,65 @@ pub struct SpiHeapTupleData<'conn> {
 }
 
 impl Spi {
-    pub fn get_one<A: FromDatum + IntoDatum>(query: &str) -> Result<Option<A>> {
-        Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_one())
+    pub fn get_one<A: FromDatum + IntoDatum + ToOwned>(
+        query: &str,
+    ) -> Result<Option<<A as ToOwned>::Owned>> {
+        Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_one::<A>())
     }
 
-    pub fn get_two<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two<A: FromDatum + IntoDatum + ToOwned, B: FromDatum + IntoDatum + ToOwned>(
         query: &str,
-    ) -> Result<(Option<A>, Option<B>)> {
+    ) -> Result<(Option<<A as ToOwned>::Owned>, Option<<B as ToOwned>::Owned>)> {
         Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_two::<A, B>())
     }
 
     pub fn get_three<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: FromDatum + IntoDatum + ToOwned,
+        B: FromDatum + IntoDatum + ToOwned,
+        C: FromDatum + IntoDatum + ToOwned,
     >(
         query: &str,
-    ) -> Result<(Option<A>, Option<B>, Option<C>)> {
+    ) -> Result<(
+        Option<<A as ToOwned>::Owned>,
+        Option<<B as ToOwned>::Owned>,
+        Option<<C as ToOwned>::Owned>,
+    )> {
         Spi::connect(|mut client| {
             client.update(query, Some(1), None)?.first().get_three::<A, B, C>()
         })
     }
 
-    pub fn get_one_with_args<A: FromDatum + IntoDatum>(
+    pub fn get_one_with_args<A: FromDatum + IntoDatum + ToOwned>(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
-    ) -> Result<Option<A>> {
-        Spi::connect(|mut client| client.update(query, Some(1), Some(args))?.first().get_one())
+    ) -> Result<Option<<A as ToOwned>::Owned>> {
+        Spi::connect(|mut client| client.update(query, Some(1), Some(args))?.first().get_one::<A>())
     }
 
-    pub fn get_two_with_args<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two_with_args<
+        A: FromDatum + IntoDatum + ToOwned,
+        B: FromDatum + IntoDatum + ToOwned,
+    >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
-    ) -> Result<(Option<A>, Option<B>)> {
+    ) -> Result<(Option<<A as ToOwned>::Owned>, Option<<B as ToOwned>::Owned>)> {
         Spi::connect(|mut client| {
             client.update(query, Some(1), Some(args))?.first().get_two::<A, B>()
         })
     }
 
     pub fn get_three_with_args<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: FromDatum + IntoDatum + ToOwned,
+        B: FromDatum + IntoDatum + ToOwned,
+        C: FromDatum + IntoDatum + ToOwned,
     >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
-    ) -> Result<(Option<A>, Option<B>, Option<C>)> {
+    ) -> Result<(
+        Option<<A as ToOwned>::Owned>,
+        Option<<B as ToOwned>::Owned>,
+        Option<<C as ToOwned>::Owned>,
+    )> {
         Spi::connect(|mut client| {
             client.update(query, Some(1), Some(args))?.first().get_three::<A, B, C>()
         })
@@ -1035,25 +1048,31 @@ impl<'conn> SpiTupleTable<'conn> {
         self.len() == 0
     }
 
-    pub fn get_one<A: FromDatum + IntoDatum>(&self) -> Result<Option<A>> {
-        self.get(1)
+    pub fn get_one<A: FromDatum + IntoDatum + ToOwned>(
+        &self,
+    ) -> Result<Option<<A as ToOwned>::Owned>> {
+        self.get::<A>(1)
     }
 
-    pub fn get_two<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two<A: FromDatum + IntoDatum + ToOwned, B: FromDatum + IntoDatum + ToOwned>(
         &self,
-    ) -> Result<(Option<A>, Option<B>)> {
+    ) -> Result<(Option<<A as ToOwned>::Owned>, Option<<B as ToOwned>::Owned>)> {
         let a = self.get::<A>(1)?;
         let b = self.get::<B>(2)?;
         Ok((a, b))
     }
 
     pub fn get_three<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: FromDatum + IntoDatum + ToOwned,
+        B: FromDatum + IntoDatum + ToOwned,
+        C: FromDatum + IntoDatum + ToOwned,
     >(
         &self,
-    ) -> Result<(Option<A>, Option<B>, Option<C>)> {
+    ) -> Result<(
+        Option<<A as ToOwned>::Owned>,
+        Option<<B as ToOwned>::Owned>,
+        Option<<C as ToOwned>::Owned>,
+    )> {
         let a = self.get::<A>(1)?;
         let b = self.get::<B>(2)?;
         let c = self.get::<C>(3)?;
@@ -1102,7 +1121,10 @@ impl<'conn> SpiTupleTable<'conn> {
     ///
     /// This function will panic there is no parent MemoryContext.  This is an incredibly unlikely
     /// situation.
-    pub fn get<T: IntoDatum + FromDatum>(&self, ordinal: usize) -> Result<Option<T>> {
+    pub fn get<T: IntoDatum + FromDatum + ToOwned>(
+        &self,
+        ordinal: usize,
+    ) -> Result<Option<<T as ToOwned>::Owned>> {
         let (_, tupdesc) = self.get_spi_tuptable()?;
         let datum = self.get_datum_by_ordinal(ordinal)?;
         let is_null = datum.is_none();
@@ -1118,7 +1140,8 @@ impl<'conn> SpiTupleTable<'conn> {
                 // SAFETY:  we know `self.tupdesc.is_some()` because an Ok return from
                 // `self.get_datum_by_ordinal()` above already decided that for us
                 pg_sys::SPI_gettypeid(tupdesc, ordinal as _),
-            )?)
+            )?
+            .map(|t| t.to_owned()))
         }
     }
 
@@ -1128,11 +1151,11 @@ impl<'conn> SpiTupleTable<'conn> {
     ///
     /// If the specified name is invalid a [`Error::SpiError(SpiError::NoAttribute)`] is returned
     /// If we have no backing tuple table a [`Error::NoTupleTable`] is returned
-    pub fn get_by_name<T: IntoDatum + FromDatum, S: AsRef<str>>(
+    pub fn get_by_name<T: IntoDatum + FromDatum + ToOwned, S: AsRef<str>>(
         &self,
         name: S,
-    ) -> Result<Option<T>> {
-        self.get(self.column_ordinal(name)?)
+    ) -> Result<Option<<T as ToOwned>::Owned>> {
+        self.get::<T>(self.column_ordinal(name)?)
     }
 
     /// Get a raw Datum from this HeapTuple by its ordinal position.
@@ -1302,8 +1325,11 @@ impl<'conn> SpiHeapTupleData<'conn> {
     ///
     /// Returns a [`Error::DatumError`] if the desired Rust type is incompatible
     /// with the underlying Datum
-    pub fn get<T: IntoDatum + FromDatum>(&self, ordinal: usize) -> Result<Option<T>> {
-        self.get_datum_by_ordinal(ordinal).map(|entry| entry.value())?
+    pub fn get<T: IntoDatum + FromDatum + ToOwned>(
+        &self,
+        ordinal: usize,
+    ) -> Result<Option<<T as ToOwned>::Owned>> {
+        self.get_datum_by_ordinal(ordinal).map(|entry| entry.value::<T>())?
     }
 
     /// Get a typed value from this HeapTuple by its name in the resultset.
@@ -1312,11 +1338,11 @@ impl<'conn> SpiHeapTupleData<'conn> {
     ///
     /// Returns a [`Error::DatumError`] if the desired Rust type is incompatible
     /// with the underlying Datum
-    pub fn get_by_name<T: IntoDatum + FromDatum, S: AsRef<str>>(
+    pub fn get_by_name<T: IntoDatum + FromDatum + ToOwned, S: AsRef<str>>(
         &self,
         name: S,
-    ) -> Result<Option<T>> {
-        self.get_datum_by_name(name.as_ref()).map(|entry| entry.value())?
+    ) -> Result<Option<<T as ToOwned>::Owned>> {
+        self.get_datum_by_name(name.as_ref()).map(|entry| entry.value::<T>())?
     }
 
     /// Get a raw Datum from this HeapTuple by its ordinal position.
@@ -1425,16 +1451,19 @@ impl<'conn> SpiHeapTupleData<'conn> {
 }
 
 impl<'conn> SpiHeapTupleDataEntry<'conn> {
-    pub fn value<T: IntoDatum + FromDatum>(&self) -> Result<Option<T>> {
+    pub fn value<T: IntoDatum + FromDatum + ToOwned>(
+        &self,
+    ) -> Result<Option<<T as ToOwned>::Owned>> {
         match self.datum.as_ref() {
             Some(datum) => unsafe {
-                T::try_from_datum_in_memory_context(
+                Ok(T::try_from_datum_in_memory_context(
                     self.client.mcxt.to_inner(),
                     *datum,
                     false,
                     self.type_oid,
                 )
-                .map_err(|e| Error::DatumError(e))
+                .map_err(|e| Error::DatumError(e))?
+                .map(|t| t.to_owned()))
             },
             None => Ok(None),
         }
