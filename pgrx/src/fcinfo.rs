@@ -199,7 +199,7 @@ mod pg_11 {
     feature = "pg15",
     feature = "pg16"
 ))]
-mod pg_12_13_14_15 {
+mod pg_12_13_14_15_16 {
     use crate::{pg_sys, FromDatum};
 
     /// Get a numbered argument for a `PG_FUNCTION_INFO_V1` function as the specified Rust type.
@@ -333,7 +333,7 @@ pub use pg_11::*;
     feature = "pg15",
     feature = "pg16"
 ))]
-pub use pg_12_13_14_15::*;
+pub use pg_12_13_14_15_16::*;
 
 /// Get a numbered argument for a `PG_FUNCTION_INFO_V1` function as raw pointer to a Rust type `T`.
 ///
