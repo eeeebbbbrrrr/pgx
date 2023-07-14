@@ -182,6 +182,35 @@ pub enum Error {
     NoTupleTable,
 }
 
+/// A marker trait to indicate that types are safe to return from Spi.  The definition of "safe" here
+/// is that the type instance is 100% allocated in Rust memory and not backed by any Postgres MemoryContext.
+pub unsafe trait SpiSafe {}
+
+unsafe impl SpiSafe for String {}
+unsafe impl SpiSafe for bool {}
+unsafe impl SpiSafe for char {}
+unsafe impl SpiSafe for crate::datum::AnyNumeric {}
+unsafe impl SpiSafe for crate::datum::Inet {}
+unsafe impl SpiSafe for crate::datum::Interval {}
+unsafe impl SpiSafe for crate::datum::Json {}
+unsafe impl SpiSafe for crate::datum::JsonB {}
+unsafe impl SpiSafe for crate::datum::Time {}
+unsafe impl SpiSafe for crate::datum::Timestamp {}
+unsafe impl SpiSafe for crate::datum::TimestampWithTimeZone {}
+unsafe impl SpiSafe for crate::datum::Uuid {}
+unsafe impl SpiSafe for crate::heap_tuple::PgHeapTuple<'_, crate::AllocatedByRust> {}
+unsafe impl SpiSafe for f32 {}
+unsafe impl SpiSafe for i32 {}
+unsafe impl SpiSafe for i64 {}
+unsafe impl SpiSafe for i8 {}
+unsafe impl SpiSafe for pg_sys::BOX {}
+unsafe impl SpiSafe for pg_sys::Oid {}
+unsafe impl SpiSafe for pg_sys::Point {}
+unsafe impl SpiSafe for u8 {}
+unsafe impl<T> SpiSafe for Option<T> where T: SpiSafe {}
+unsafe impl<T> SpiSafe for Vec<T> where T: SpiSafe {}
+unsafe impl<T> SpiSafe for T where T: crate::PostgresType {}
+
 pub struct Spi;
 
 impl Spi {
@@ -441,7 +470,7 @@ pub struct SpiHeapTupleData<'conn> {
 }
 
 impl Spi {
-    pub fn get_one<A: FromDatum + IntoDatum>(query: &str) -> Result<Option<A>> {
+    pub fn get_one<A: FromDatum + IntoDatum + SpiSafe>(query: &str) -> Result<Option<A>> {
         Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_one())
     }
 
@@ -544,7 +573,7 @@ impl Spi {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use pgrx::prelude::*;
+    /// use prelude::*;
     /// # fn foo() -> spi::Result<Option<String>> {
     /// let name = Spi::connect(|client| {
     ///     client.select("SELECT 'Bob'", None, None)?.first().get_one()
@@ -558,7 +587,7 @@ impl Spi {
     /// following code will not compile:
     ///
     /// ```rust,compile_fail
-    /// use pgrx::prelude::*;
+    /// use prelude::*;
     /// let cant_return_client = Spi::connect(|client| client);
     /// ```
     ///
@@ -733,14 +762,14 @@ type CursorName = String;
 /// # Examples
 /// ## Simple cursor
 /// ```rust,no_run
-/// use pgrx::prelude::*;
+/// use prelude::*;
 /// # fn foo() -> spi::Result<()> {
 /// Spi::connect(|mut client| {
 ///     let mut cursor = client.open_cursor("SELECT * FROM generate_series(1, 5)", None);
 ///     assert_eq!(Some(1u32), cursor.fetch(1)?.get_one::<u32>()?);
 ///     assert_eq!(Some(2u32), cursor.fetch(2)?.get_one::<u32>()?);
 ///     assert_eq!(Some(3u32), cursor.fetch(3)?.get_one::<u32>()?);
-///     Ok::<_, pgrx::spi::Error>(())
+///     Ok::<_, spi::Error>(())
 ///     // <--- all three SpiTupleTable get freed by Spi::connect at this point
 /// })
 /// # }
@@ -748,7 +777,7 @@ type CursorName = String;
 ///
 /// ## Cursor by name
 /// ```rust,no_run
-/// use pgrx::prelude::*;
+/// use prelude::*;
 /// # fn foo() -> spi::Result<()> {
 /// let cursor_name = Spi::connect(|mut client| {
 ///     let mut cursor = client.open_cursor("SELECT * FROM generate_series(1, 5)", None);

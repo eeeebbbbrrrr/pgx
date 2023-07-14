@@ -125,6 +125,44 @@ fn issue1209_fixed() -> Result<Option<String>, Box<dyn std::error::Error>> {
     Ok(res.first().cloned().flatten().map(|s| s.to_string()))
 }
 
+#[pg_extern]
+fn leaky_str() {
+    let tmp: &'static str = Spi::connect(|c| {
+        c.select("select repeat('x', 1024 * 1024 * 1000)", None, None)
+            .unwrap()
+            .next()
+            .unwrap()
+            .get(1)
+            .unwrap()
+            .unwrap()
+    });
+}
+
+#[pg_extern]
+fn rc_str() -> Result<Option<String>, Box<dyn std::error::Error>> {
+    use std::cell::RefCell;
+    thread_local! {
+        static RES: RefCell<Option<&'static str>> = RefCell::new(None);
+    }
+
+    RES.with(|res| {
+        let mut res = res.borrow_mut();
+        if res.is_none() {
+            let tmp: &'static str = Spi::connect(|c| {
+                c.select("select repeat('x', 1024 * 1024)", None, None)
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .get(1)
+                    .unwrap()
+                    .unwrap()
+            });
+            *res = Some(tmp);
+        }
+        Ok(Some(res.unwrap().to_string()))
+    })
+}
+
 extension_sql!(
     r#"
 
