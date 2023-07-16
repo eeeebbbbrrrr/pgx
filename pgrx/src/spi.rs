@@ -474,7 +474,7 @@ where
 }
 
 impl Spi {
-    pub fn get_one<A: SpiCompatible, R>(query: &str) -> Result<Option<A::Return>> {
+    pub fn get_one<A: SpiCompatible>(query: &str) -> Result<Option<A::Return>> {
         Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_one::<A>())
     }
 
