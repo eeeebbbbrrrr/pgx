@@ -648,6 +648,10 @@ fn impl_postgres_enum(ast: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
     }
 
     stream.extend(quote! {
+
+        // SAFETY:  a #[derive(PostgresEnum)] is safe for return from Spi as it's not backed by Postgres-allocated memory
+        unsafe impl ::pgrx::spi::SpiSafe for #enum_ident {}
+
         impl ::pgrx::datum::FromDatum for #enum_ident {
             #[inline]
             unsafe fn from_polymorphic_datum(datum: ::pgrx::pg_sys::Datum, is_null: bool, typeoid: ::pgrx::pg_sys::Oid) -> Option<#enum_ident> {
@@ -755,6 +759,8 @@ fn impl_postgres_type(ast: DeriveInput) -> syn::Result<proc_macro2::TokenStream>
     // all #[derive(PostgresType)] need to implement that trait
     stream.extend(quote! {
         impl #generics ::pgrx::PostgresType for #name #generics { }
+        // SAFETY:  A #[derive(PostgresType)] is safe for return from Spi as it's not backed by Postgres-allocated memory
+        unsafe impl #generics ::pgrx::spi::SpiSafe for #name #generics { }
     });
 
     // and if we don't have custom inout/funcs, we use the JsonInOutFuncs trait

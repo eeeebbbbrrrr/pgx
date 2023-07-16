@@ -9,7 +9,10 @@
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
 //! Safe access to Postgres' *Server Programming Interface* (SPI).
 
-use crate::{pg_sys, FromDatum, IntoDatum, Json, PgMemoryContexts, PgOid, TryFromDatumError};
+use crate::{
+    pg_sys, FromDatum, IntoDatum, Json, PgBox, PgMemoryContexts, PgOid, PostgresType,
+    TryFromDatumError,
+};
 use core::fmt::Formatter;
 use pgrx_pg_sys::panic::ErrorReportable;
 use std::ffi::{CStr, CString};
@@ -184,32 +187,48 @@ pub enum Error {
 
 /// A marker trait to indicate that types are safe to return from Spi.  The definition of "safe" here
 /// is that the type instance is 100% allocated in Rust memory and not backed by any Postgres MemoryContext.
-pub unsafe trait SpiSafe {}
+pub unsafe trait SpiSafe {
+    unsafe fn try_from_datum_spi(
+        datum: pg_sys::Datum,
+        is_null: bool,
+        type_oid: pg_sys::Oid,
+    ) -> Result<Option<Self>>
+    where
+        Self: Sized + FromDatum + IntoDatum,
+    {
+        <Self as FromDatum>::try_from_datum(datum, is_null, type_oid)
+            .map_err(|e| Error::DatumError(e))
+    }
+}
 
+unsafe impl SpiSafe for () {}
 unsafe impl SpiSafe for String {}
+unsafe impl SpiSafe for Vec<u8> {}
 unsafe impl SpiSafe for bool {}
 unsafe impl SpiSafe for char {}
 unsafe impl SpiSafe for crate::datum::AnyNumeric {}
+unsafe impl SpiSafe for crate::datum::Date {}
 unsafe impl SpiSafe for crate::datum::Inet {}
 unsafe impl SpiSafe for crate::datum::Interval {}
 unsafe impl SpiSafe for crate::datum::Json {}
 unsafe impl SpiSafe for crate::datum::JsonB {}
 unsafe impl SpiSafe for crate::datum::Time {}
+unsafe impl SpiSafe for crate::datum::TimeWithTimeZone {}
 unsafe impl SpiSafe for crate::datum::Timestamp {}
 unsafe impl SpiSafe for crate::datum::TimestampWithTimeZone {}
 unsafe impl SpiSafe for crate::datum::Uuid {}
-unsafe impl SpiSafe for crate::heap_tuple::PgHeapTuple<'_, crate::AllocatedByRust> {}
 unsafe impl SpiSafe for f32 {}
+unsafe impl SpiSafe for f64 {}
+unsafe impl SpiSafe for i16 {}
 unsafe impl SpiSafe for i32 {}
 unsafe impl SpiSafe for i64 {}
 unsafe impl SpiSafe for i8 {}
 unsafe impl SpiSafe for pg_sys::BOX {}
 unsafe impl SpiSafe for pg_sys::Oid {}
 unsafe impl SpiSafe for pg_sys::Point {}
-unsafe impl SpiSafe for u8 {}
-unsafe impl<T> SpiSafe for Option<T> where T: SpiSafe {}
-unsafe impl<T> SpiSafe for Vec<T> where T: SpiSafe {}
-unsafe impl<T> SpiSafe for T where T: crate::PostgresType {}
+unsafe impl<T> SpiSafe for Vec<Option<T>> where T: SpiSafe + FromDatum + IntoDatum {}
+unsafe impl<T> SpiSafe for Vec<T> where T: SpiSafe + FromDatum + IntoDatum {}
+unsafe impl<const P: u32, const S: u32> SpiSafe for crate::datum::Numeric<P, S> {}
 
 pub struct Spi;
 
@@ -470,20 +489,20 @@ pub struct SpiHeapTupleData<'conn> {
 }
 
 impl Spi {
-    pub fn get_one<A: FromDatum + IntoDatum + SpiSafe>(query: &str) -> Result<Option<A>> {
+    pub fn get_one<A: SpiSafe + FromDatum + IntoDatum>(query: &str) -> Result<Option<A>> {
         Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_one())
     }
 
-    pub fn get_two<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two<A: SpiSafe + FromDatum + IntoDatum, B: SpiSafe + FromDatum + IntoDatum>(
         query: &str,
     ) -> Result<(Option<A>, Option<B>)> {
         Spi::connect(|mut client| client.update(query, Some(1), None)?.first().get_two::<A, B>())
     }
 
     pub fn get_three<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: SpiSafe + FromDatum + IntoDatum,
+        B: SpiSafe + FromDatum + IntoDatum,
+        C: SpiSafe + FromDatum + IntoDatum,
     >(
         query: &str,
     ) -> Result<(Option<A>, Option<B>, Option<C>)> {
@@ -492,14 +511,17 @@ impl Spi {
         })
     }
 
-    pub fn get_one_with_args<A: FromDatum + IntoDatum>(
+    pub fn get_one_with_args<A: SpiSafe + FromDatum + IntoDatum>(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
     ) -> Result<Option<A>> {
         Spi::connect(|mut client| client.update(query, Some(1), Some(args))?.first().get_one())
     }
 
-    pub fn get_two_with_args<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two_with_args<
+        A: SpiSafe + FromDatum + IntoDatum,
+        B: SpiSafe + FromDatum + IntoDatum,
+    >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
     ) -> Result<(Option<A>, Option<B>)> {
@@ -509,9 +531,9 @@ impl Spi {
     }
 
     pub fn get_three_with_args<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: SpiSafe + FromDatum + IntoDatum,
+        B: SpiSafe + FromDatum + IntoDatum,
+        C: SpiSafe + FromDatum + IntoDatum,
     >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
@@ -1064,11 +1086,11 @@ impl<'conn> SpiTupleTable<'conn> {
         self.len() == 0
     }
 
-    pub fn get_one<A: FromDatum + IntoDatum>(&self) -> Result<Option<A>> {
+    pub fn get_one<A: SpiSafe + FromDatum + IntoDatum>(&self) -> Result<Option<A>> {
         self.get(1)
     }
 
-    pub fn get_two<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two<A: SpiSafe + FromDatum + IntoDatum, B: SpiSafe + FromDatum + IntoDatum>(
         &self,
     ) -> Result<(Option<A>, Option<B>)> {
         let a = self.get::<A>(1)?;
@@ -1077,9 +1099,9 @@ impl<'conn> SpiTupleTable<'conn> {
     }
 
     pub fn get_three<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: SpiSafe + FromDatum + IntoDatum,
+        B: SpiSafe + FromDatum + IntoDatum,
+        C: SpiSafe + FromDatum + IntoDatum,
     >(
         &self,
     ) -> Result<(Option<A>, Option<B>, Option<C>)> {
@@ -1131,7 +1153,7 @@ impl<'conn> SpiTupleTable<'conn> {
     ///
     /// This function will panic there is no parent MemoryContext.  This is an incredibly unlikely
     /// situation.
-    pub fn get<T: IntoDatum + FromDatum>(&self, ordinal: usize) -> Result<Option<T>> {
+    pub fn get<T: SpiSafe + FromDatum + IntoDatum>(&self, ordinal: usize) -> Result<Option<T>> {
         let (_, tupdesc) = self.get_spi_tuptable()?;
         let datum = self.get_datum_by_ordinal(ordinal)?;
         let is_null = datum.is_none();
@@ -1140,14 +1162,13 @@ impl<'conn> SpiTupleTable<'conn> {
         unsafe {
             // SAFETY:  we know the constraints around `datum` and `is_null` match because we
             // just got them from the underlying heap tuple
-            Ok(T::try_from_datum_in_memory_context(
-                self.client.mcxt.to_inner(),
+            T::try_from_datum_spi(
                 datum,
                 is_null,
                 // SAFETY:  we know `self.tupdesc.is_some()` because an Ok return from
                 // `self.get_datum_by_ordinal()` above already decided that for us
                 pg_sys::SPI_gettypeid(tupdesc, ordinal as _),
-            )?)
+            )
         }
     }
 
@@ -1157,7 +1178,7 @@ impl<'conn> SpiTupleTable<'conn> {
     ///
     /// If the specified name is invalid a [`Error::SpiError(SpiError::NoAttribute)`] is returned
     /// If we have no backing tuple table a [`Error::NoTupleTable`] is returned
-    pub fn get_by_name<T: IntoDatum + FromDatum, S: AsRef<str>>(
+    pub fn get_by_name<T: SpiSafe + FromDatum + IntoDatum, S: AsRef<str>>(
         &self,
         name: S,
     ) -> Result<Option<T>> {
@@ -1331,7 +1352,7 @@ impl<'conn> SpiHeapTupleData<'conn> {
     ///
     /// Returns a [`Error::DatumError`] if the desired Rust type is incompatible
     /// with the underlying Datum
-    pub fn get<T: IntoDatum + FromDatum>(&self, ordinal: usize) -> Result<Option<T>> {
+    pub fn get<T: SpiSafe + FromDatum + IntoDatum>(&self, ordinal: usize) -> Result<Option<T>> {
         self.get_datum_by_ordinal(ordinal).map(|entry| entry.value())?
     }
 
@@ -1341,7 +1362,7 @@ impl<'conn> SpiHeapTupleData<'conn> {
     ///
     /// Returns a [`Error::DatumError`] if the desired Rust type is incompatible
     /// with the underlying Datum
-    pub fn get_by_name<T: IntoDatum + FromDatum, S: AsRef<str>>(
+    pub fn get_by_name<T: SpiSafe + FromDatum + IntoDatum, S: AsRef<str>>(
         &self,
         name: S,
     ) -> Result<Option<T>> {
@@ -1454,17 +1475,9 @@ impl<'conn> SpiHeapTupleData<'conn> {
 }
 
 impl<'conn> SpiHeapTupleDataEntry<'conn> {
-    pub fn value<T: IntoDatum + FromDatum>(&self) -> Result<Option<T>> {
+    pub fn value<T: SpiSafe + FromDatum + IntoDatum>(&self) -> Result<Option<T>> {
         match self.datum.as_ref() {
-            Some(datum) => unsafe {
-                T::try_from_datum_in_memory_context(
-                    self.client.mcxt.to_inner(),
-                    *datum,
-                    false,
-                    self.type_oid,
-                )
-                .map_err(|e| Error::DatumError(e))
-            },
+            Some(datum) => unsafe { T::try_from_datum_spi(*datum, false, self.type_oid) },
             None => Ok(None),
         }
     }
