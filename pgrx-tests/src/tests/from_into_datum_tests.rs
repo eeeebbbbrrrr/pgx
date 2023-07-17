@@ -14,6 +14,7 @@ mod tests {
     use crate as pgrx_tests;
     use std::error::Error;
     use std::ffi::CStr;
+    use std::ffi::CString;
 
     use pgrx::prelude::*;
 
@@ -37,10 +38,10 @@ mod tests {
 
     #[pg_test]
     fn test_cstring_roundtrip() -> Result<(), Box<dyn Error>> {
-        let cstr = Spi::get_one::<&CStr>("SELECT tests.cstring_roundtrip('hello')")?
+        let cstr = Spi::get_one::<CString>("SELECT tests.cstring_roundtrip('hello')")?
             .expect("SPI result was NULL");
         let expected = CStr::from_bytes_with_nul(b"hello\0")?;
-        assert_eq!(cstr, expected);
+        assert_eq!(cstr.as_c_str(), expected);
         Ok(())
     }
 }

@@ -192,6 +192,7 @@ pub unsafe trait SpiSafe: ToOwned {}
 unsafe impl SpiSafe for () {}
 unsafe impl SpiSafe for String {}
 unsafe impl SpiSafe for Vec<u8> {}
+unsafe impl SpiSafe for alloc::ffi::CString {}
 unsafe impl SpiSafe for bool {}
 unsafe impl SpiSafe for char {}
 unsafe impl SpiSafe for crate::datum::AnyNumeric {}

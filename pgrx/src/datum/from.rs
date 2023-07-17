@@ -14,6 +14,7 @@ use crate::{
 };
 use core::ffi::CStr;
 use pgrx_pg_sys::{Datum, Oid};
+use std::ffi::CString;
 use std::num::NonZeroUsize;
 
 /// If converting a Datum to a Rust type fails, this is the set of possible reasons why.
@@ -464,6 +465,20 @@ impl<'a> FromDatum for &'a core::ffi::CStr {
                 .switch_to(|_| core::ffi::CStr::from_ptr(pg_sys::pstrdup(datum.cast_mut_ptr())));
 
             Some(copy)
+        }
+    }
+}
+
+impl FromDatum for alloc::ffi::CString {
+    unsafe fn from_polymorphic_datum(datum: Datum, is_null: bool, _typoid: Oid) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if is_null {
+            None
+        } else {
+            let cstr = core::ffi::CStr::from_ptr(datum.cast_mut_ptr());
+            Some(CString::from(cstr))
         }
     }
 }

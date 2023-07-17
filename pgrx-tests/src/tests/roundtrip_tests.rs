@@ -39,7 +39,7 @@ impl RandomData {
 #[pgrx::pg_schema]
 mod tests {
     use std::error::Error;
-    use std::ffi::CStr;
+    use std::ffi::{CStr, CString};
     use std::str::FromStr;
 
     use pgrx::pg_sys::BuiltinOid;
@@ -103,9 +103,7 @@ mod tests {
         AnyNumeric,
         AnyNumeric::from_str("31241234123412341234").unwrap()
     );
-    roundtrip!(rt_cstr, test_rt_cstr, &'static CStr, unsafe {
-        CStr::from_bytes_with_nul_unchecked(b"&cstr\0")
-    });
+    roundtrip!(rt_cstr, test_rt_cstr, CString, CString::new("cstring").unwrap());
 
     roundtrip!(rt_date, test_rt_date, Date, Date::from_str("1977-03-20").unwrap());
     roundtrip!(rt_ts, test_rt_ts, Timestamp, Timestamp::from_str("1977-03-20 04:42:00").unwrap());
@@ -290,13 +288,13 @@ mod tests {
     roundtrip!(
         rt_array_cstr,
         test_rt_array_cstr,
-        Vec<Option<&'static CStr>>,
+        Vec<Option<CString>>,
         vec![
             None,
-            Some(unsafe { CStr::from_bytes_with_nul_unchecked(b"&one\0") }),
-            Some(unsafe { CStr::from_bytes_with_nul_unchecked(b"&two\0") }),
+            Some(CString::new("one").unwrap()),
+            Some(CString::new("two").unwrap()),
             None,
-            Some(unsafe { CStr::from_bytes_with_nul_unchecked(b"&three\0") }),
+            Some(CString::new("three").unwrap()),
             None,
         ]
     );
