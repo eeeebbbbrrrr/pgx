@@ -135,8 +135,9 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT species FROM tests.before_insert_field_update;");
-        assert_eq!(retval, Ok(Some("Bear")));
+        let retval =
+            Spi::get_one::<String>("SELECT species FROM tests.before_insert_field_update;");
+        assert_eq!(retval, Ok(Some("Bear".to_string())));
     }
 
     #[pg_trigger]
@@ -181,8 +182,8 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT booper FROM tests.before_insert_add_field;");
-        assert_eq!(retval, Ok(Some("Swooper")));
+        let retval = Spi::get_one::<String>("SELECT booper FROM tests.before_insert_add_field;");
+        assert_eq!(retval, Ok(Some("Swooper".to_string())));
     }
 
     #[pg_trigger]
@@ -239,8 +240,8 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT title FROM tests.before_update_skip;");
-        assert_eq!(retval, Ok(Some("Fox")));
+        let retval = Spi::get_one::<String>("SELECT title FROM tests.before_update_skip;");
+        assert_eq!(retval, Ok(Some("Fox".to_string())));
     }
 
     #[pg_trigger]
@@ -322,35 +323,37 @@ mod tests {
         .expect("SPI failed");
 
         let marker =
-            Spi::get_one::<&str>("SELECT marker FROM tests.before_insert_trigger_metadata;")?
+            Spi::get_one::<String>("SELECT marker FROM tests.before_insert_trigger_metadata;")?
                 .unwrap();
-        let trigger_name =
-            Spi::get_one::<&str>("SELECT trigger_name FROM tests.before_insert_trigger_metadata;")?
-                .unwrap();
-        let trigger_when =
-            Spi::get_one::<&str>("SELECT trigger_when FROM tests.before_insert_trigger_metadata;")?
-                .unwrap();
-        let trigger_level = Spi::get_one::<&str>(
+        let trigger_name = Spi::get_one::<String>(
+            "SELECT trigger_name FROM tests.before_insert_trigger_metadata;",
+        )?
+        .unwrap();
+        let trigger_when = Spi::get_one::<String>(
+            "SELECT trigger_when FROM tests.before_insert_trigger_metadata;",
+        )?
+        .unwrap();
+        let trigger_level = Spi::get_one::<String>(
             "SELECT trigger_level FROM tests.before_insert_trigger_metadata;",
         )?
         .unwrap();
         let trigger_op =
-            Spi::get_one::<&str>("SELECT trigger_op FROM tests.before_insert_trigger_metadata;")?
+            Spi::get_one::<String>("SELECT trigger_op FROM tests.before_insert_trigger_metadata;")?
                 .unwrap();
         let trigger_relid = Spi::get_one::<pg_sys::Oid>(
             "SELECT trigger_relid FROM tests.before_insert_trigger_metadata;",
         )?;
-        let trigger_old_transition_table_name = Spi::get_one::<&str>(
+        let trigger_old_transition_table_name = Spi::get_one::<String>(
             "SELECT trigger_old_transition_table_name FROM tests.before_insert_trigger_metadata;",
         )?;
-        let trigger_new_transition_table_name = Spi::get_one::<&str>(
+        let trigger_new_transition_table_name = Spi::get_one::<String>(
             "SELECT trigger_new_transition_table_name FROM tests.before_insert_trigger_metadata;",
         )?;
-        let trigger_table_name = Spi::get_one::<&str>(
+        let trigger_table_name = Spi::get_one::<String>(
             "SELECT trigger_table_name FROM tests.before_insert_trigger_metadata;",
         )?
         .unwrap();
-        let trigger_table_schema = Spi::get_one::<&str>(
+        let trigger_table_schema = Spi::get_one::<String>(
             "SELECT trigger_table_schema FROM tests.before_insert_trigger_metadata;",
         )?
         .unwrap();
@@ -432,39 +435,40 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let marker =
-            Spi::get_one::<&str>("SELECT marker FROM tests.before_insert_trigger_metadata_safe;")?
-                .unwrap();
-        let trigger_name = Spi::get_one::<&str>(
+        let marker = Spi::get_one::<String>(
+            "SELECT marker FROM tests.before_insert_trigger_metadata_safe;",
+        )?
+        .unwrap();
+        let trigger_name = Spi::get_one::<String>(
             "SELECT trigger_name FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
-        let trigger_when = Spi::get_one::<&str>(
+        let trigger_when = Spi::get_one::<String>(
             "SELECT trigger_when FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
-        let trigger_level = Spi::get_one::<&str>(
+        let trigger_level = Spi::get_one::<String>(
             "SELECT trigger_level FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
-        let trigger_op = Spi::get_one::<&str>(
+        let trigger_op = Spi::get_one::<String>(
             "SELECT trigger_op FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
         let trigger_relid = Spi::get_one::<pg_sys::Oid>(
             "SELECT trigger_relid FROM tests.before_insert_trigger_metadata_safe;",
         )?;
-        let trigger_old_transition_table_name = Spi::get_one::<&str>(
+        let trigger_old_transition_table_name = Spi::get_one::<String>(
             "SELECT trigger_old_transition_table_name FROM tests.before_insert_trigger_metadata_safe;",
         )?;
-        let trigger_new_transition_table_name = Spi::get_one::<&str>(
+        let trigger_new_transition_table_name = Spi::get_one::<String>(
             "SELECT trigger_new_transition_table_name FROM tests.before_insert_trigger_metadata_safe;",
         )?;
-        let trigger_table_name = Spi::get_one::<&str>(
+        let trigger_table_name = Spi::get_one::<String>(
             "SELECT trigger_table_name FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
-        let trigger_table_schema = Spi::get_one::<&str>(
+        let trigger_table_schema = Spi::get_one::<String>(
             "SELECT trigger_table_schema FROM tests.before_insert_trigger_metadata_safe;",
         )?
         .unwrap();
@@ -528,8 +532,8 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT species FROM tests.has_sql_option_set;");
-        assert_eq!(retval, Ok(Some("Fox")));
+        let retval = Spi::get_one::<String>("SELECT species FROM tests.has_sql_option_set;");
+        assert_eq!(retval, Ok(Some("Fox".to_string())));
     }
 
     #[pg_trigger]
@@ -566,8 +570,8 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT species FROM tests.has_noop_postgres;");
-        assert_eq!(retval, Ok(Some("Fox")));
+        let retval = Spi::get_one::<String>("SELECT species FROM tests.has_noop_postgres;");
+        assert_eq!(retval, Ok(Some("Fox".to_string())));
     }
 
     #[pg_trigger]
@@ -604,8 +608,8 @@ mod tests {
         )
         .expect("SPI failed");
 
-        let retval = Spi::get_one::<&str>("SELECT species FROM tests.has_noop_rust;");
-        assert_eq!(retval, Ok(Some("Fox")));
+        let retval = Spi::get_one::<String>("SELECT species FROM tests.has_noop_rust;");
+        assert_eq!(retval, Ok(Some("Fox".to_string())));
     }
 
     #[pg_trigger]

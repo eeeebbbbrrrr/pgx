@@ -58,13 +58,13 @@ mod tests {
 
     #[pg_test]
     fn test_option_default_argument() {
-        let result = Spi::get_one::<&str>("SELECT option_default_argument();");
-        assert_eq!(result, Ok(Some("got default of null")));
+        let result = Spi::get_one::<String>("SELECT option_default_argument();");
+        assert_eq!(result, Ok(Some("got default of null".to_string())));
     }
 
     #[pg_test]
     fn test_option_default_argument_specified() {
-        let result = Spi::get_one::<&str>("SELECT option_default_argument('test');");
-        assert_eq!(result, Ok(Some("test")));
+        let result = Spi::get_one::<String>("SELECT option_default_argument('test');");
+        assert_eq!(result, Ok(Some("test".to_string())));
     }
 }

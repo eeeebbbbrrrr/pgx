@@ -24,18 +24,18 @@ mod test_schema {
     #[pg_extern(sql = generate_function)]
     fn func_generated_with_custom_sql() {}
 
-    #[derive(Debug, PostgresType, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PostgresType, Serialize, Deserialize)]
     pub struct TestType(pub u64);
 
-    #[derive(Debug, PostgresType, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PostgresType, Serialize, Deserialize)]
     #[pgrx(sql = false)]
     pub struct ElidedType(pub u64);
 
-    #[derive(Debug, PostgresType, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PostgresType, Serialize, Deserialize)]
     #[pgrx(sql = generate_type)]
     pub struct OtherType(pub u64);
 
-    #[derive(Debug, PostgresType, Serialize, Deserialize)]
+    #[derive(Clone, Debug, PostgresType, Serialize, Deserialize)]
     #[pgrx(sql = "CREATE TYPE test_schema.ManuallyRenderedType;")]
     pub struct OverriddenType(pub u64);
 

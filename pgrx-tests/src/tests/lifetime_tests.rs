@@ -12,7 +12,7 @@ use pgrx::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::marker::PhantomData;
 
-#[derive(PostgresType, Serialize, Deserialize)]
+#[derive(Clone, PostgresType, Serialize, Deserialize)]
 pub struct CustomType<'s> {
     __marker: PhantomData<&'s ()>,
 }

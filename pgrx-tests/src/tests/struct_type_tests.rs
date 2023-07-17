@@ -7,12 +7,13 @@
 //LICENSE All rights reserved.
 //LICENSE
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
+use pgrx::pg_sys::{Datum, Oid};
 use pgrx::pgrx_sql_entity_graph::metadata::{
     ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
 };
 use pgrx::prelude::*;
 use pgrx::stringinfo::StringInfo;
-use pgrx::AllocatedByRust;
+use pgrx::{rust_regtypein, AllocatedByRust, PgMemoryContexts};
 
 use crate::get_named_capture;
 
@@ -32,13 +33,37 @@ impl PartialEq for Complex {
 
 impl Complex {
     #[allow(dead_code)]
-    pub fn random() -> PgBox<Complex> {
-        unsafe {
-            let mut c = PgBox::<Complex>::alloc0();
-            c.x = rand::random();
-            c.y = rand::random();
-            c.into_pg_boxed()
+    pub fn random() -> Complex {
+        unsafe { Self { x: rand::random(), y: rand::random() } }
+    }
+}
+
+unsafe impl pgrx::spi::SpiSafe for Complex {}
+
+impl FromDatum for Complex {
+    unsafe fn from_polymorphic_datum(datum: Datum, is_null: bool, _typoid: Oid) -> Option<Self>
+    where
+        Self: Sized,
+    {
+        if is_null {
+            None
+        } else {
+            Some(datum.cast_mut_ptr::<Self>().read_unaligned())
         }
+    }
+}
+
+impl IntoDatum for Complex {
+    fn into_datum(mut self) -> Option<Datum> {
+        unsafe {
+            let size = std::mem::size_of::<Complex>();
+            let ptr = PgMemoryContexts::CurrentMemoryContext.copy_ptr_into(&mut self, size);
+            Some(Datum::from(ptr))
+        }
+    }
+
+    fn type_oid() -> Oid {
+        rust_regtypein::<Complex>()
     }
 }
 
@@ -121,9 +146,8 @@ mod tests {
 
     #[pg_test]
     fn test_complex_out() {
-        let string_val = Spi::get_one::<&str>("SELECT complex_out('1.1,2.2')::text");
-
-        assert_eq!(string_val, Ok(Some("1.1, 2.2")));
+        let string_val = Spi::get_one::<String>("SELECT complex_out('1.1,2.2')::text");
+        assert_eq!(string_val, Ok(Some("1.1, 2.2".to_string())));
     }
 
     #[pg_test]
@@ -146,7 +170,7 @@ mod tests {
         let complex = Spi::connect(|mut client| {
             client.update(
                 "CREATE TABLE complex_test AS SELECT s as id, (s || '.0, 2.0' || s)::complex as value FROM generate_series(1, 1000) s;\
-                SELECT value FROM complex_test ORDER BY id;", None, None)?.first().get_one::<PgBox<Complex>>()
+                SELECT value FROM complex_test ORDER BY id;", None, None)?.first().get_one::<Complex>()
         })?.expect("datum was null");
 
         assert_eq!(&complex.x, &1.0);

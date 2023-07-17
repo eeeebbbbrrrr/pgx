@@ -149,7 +149,7 @@ fn arr_sort_uniq(arr: Array<i32>) -> Vec<i32> {
     v
 }
 
-#[derive(Debug, Eq, PartialEq, PostgresEnum, Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PostgresEnum, Serialize)]
 pub enum ArrayTestEnum {
     One,
     Two,
@@ -392,50 +392,80 @@ mod tests {
 
     #[pg_test]
     fn test_f64_slice() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<f64>>("SELECT ARRAY[1.0, 2.0, 3.0]::float8[]")?
-            .expect("datum was null");
-        assert_eq!(array.as_slice()?, &[1.0, 2.0, 3.0]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1.0, 2.0, 3.0]::float8[]", None, None)?
+                .first()
+                .get_one::<Array<f64>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice()?, &[1.0, 2.0, 3.0]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_f32_slice() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<f32>>("SELECT ARRAY[1.0, 2.0, 3.0]::float4[]")?
-            .expect("datum was null");
-        assert_eq!(array.as_slice()?, &[1.0, 2.0, 3.0]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1.0, 2.0, 3.0]::float4[]", None, None)?
+                .first()
+                .get_one::<Array<f32>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice()?, &[1.0, 2.0, 3.0]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_i64_slice() -> Result<(), Box<dyn std::error::Error>> {
-        let array =
-            Spi::get_one::<Array<i64>>("SELECT ARRAY[1, 2, 3]::bigint[]")?.expect("datum was null");
-        assert_eq!(array.as_slice()?, &[1, 2, 3]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1, 2, 3]::bigint[]", None, None)?
+                .first()
+                .get_one::<Array<i64>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice()?, &[1, 2, 3]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_i32_slice() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<i32>>("SELECT ARRAY[1, 2, 3]::integer[]")?
-            .expect("datum was null");
-        assert_eq!(array.as_slice()?, &[1, 2, 3]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1, 2, 3]::integer[]", None, None)?
+                .first()
+                .get_one::<Array<i32>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice()?, &[1, 2, 3]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_i16_slice() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<i16>>("SELECT ARRAY[1, 2, 3]::smallint[]")?
-            .expect("datum was null");
-        assert_eq!(array.as_slice()?, &[1, 2, 3]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1, 2, 3]::smallint[]", None, None)?
+                .first()
+                .get_one::<Array<i16>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice()?, &[1, 2, 3]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_slice_with_null() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<i16>>("SELECT ARRAY[1, 2, 3, NULL]::smallint[]")?
-            .expect("datum was null");
-        assert_eq!(array.as_slice(), Err(ArraySliceError::ContainsNulls));
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT ARRAY[1, 2, 3, NULL]::smallint[]", None, None)?
+                .first()
+                .get_one::<Array<i16>>()?
+                .expect("datum was null");
+            assert_eq!(array.as_slice(), Err(ArraySliceError::ContainsNulls));
+            Ok(())
+        })
     }
 
     #[pg_test]
@@ -444,90 +474,115 @@ mod tests {
         Spi::run(
             "insert into test_leak_after_drop (a) select array_agg(x::text) from generate_series(1, 10000) x;",
         )?;
-        let array = Spi::get_one::<Array<&str>>("SELECT array_echo(a) FROM test_leak_after_drop")?
-            .expect("datum was null");
-        let top_5 = array.iter().take(5).collect::<Vec<_>>();
-        drop(array);
 
-        // just check the top 5 values.  Even the first will be wrong if the backing Array data is freed
-        assert_eq!(top_5, &[Some("1"), Some("2"), Some("3"), Some("4"), Some("5")]);
-        Ok(())
+        Spi::connect(|client| {
+            let array = client
+                .select("SELECT array_echo(a) FROM test_leak_after_drop", None, None)?
+                .first()
+                .get_one::<Array<&str>>()?
+                .expect("datum was null");
+            let top_5 = array.iter().take(5).collect::<Vec<_>>();
+            drop(array);
+
+            // just check the top 5 values.  Even the first will be wrong if the backing Array data is freed
+            assert_eq!(top_5, &[Some("1"), Some("2"), Some("3"), Some("4"), Some("5")]);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_array_of_points() -> Result<(), Box<dyn std::error::Error>> {
-        let points: Array<pg_sys::Point> = Spi::get_one(
-            "SELECT ARRAY['(1,1)', '(2, 2)', '(3,3)', '(4,4)', NULL, '(5,5)']::point[]",
-        )?
-        .unwrap();
-        let points = points.into_iter().collect::<Vec<_>>();
-        let expected = vec![
-            Some(pg_sys::Point { x: 1.0, y: 1.0 }),
-            Some(pg_sys::Point { x: 2.0, y: 2.0 }),
-            Some(pg_sys::Point { x: 3.0, y: 3.0 }),
-            Some(pg_sys::Point { x: 4.0, y: 4.0 }),
-            None,
-            Some(pg_sys::Point { x: 5.0, y: 5.0 }),
-        ];
+        Spi::connect(|client| {
+            let points: Array<pg_sys::Point> = client
+                .select(
+                    "SELECT ARRAY['(1,1)', '(2, 2)', '(3,3)', '(4,4)', NULL, '(5,5)']::point[]",
+                    None,
+                    None,
+                )?
+                .first()
+                .get_one()?
+                .expect("datum was null");
+            let points = points.into_iter().collect::<Vec<_>>();
+            let expected = vec![
+                Some(pg_sys::Point { x: 1.0, y: 1.0 }),
+                Some(pg_sys::Point { x: 2.0, y: 2.0 }),
+                Some(pg_sys::Point { x: 3.0, y: 3.0 }),
+                Some(pg_sys::Point { x: 4.0, y: 4.0 }),
+                None,
+                Some(pg_sys::Point { x: 5.0, y: 5.0 }),
+            ];
 
-        for (p, expected) in points.into_iter().zip(expected.into_iter()) {
-            match (p, expected) {
-                (Some(l), Some(r)) => {
-                    assert_eq!(l.x, r.x);
-                    assert_eq!(l.y, r.y);
+            for (p, expected) in points.into_iter().zip(expected.into_iter()) {
+                match (p, expected) {
+                    (Some(l), Some(r)) => {
+                        assert_eq!(l.x, r.x);
+                        assert_eq!(l.y, r.y);
+                    }
+                    (None, None) => (),
+                    _ => panic!("points not equal"),
                 }
-                (None, None) => (),
-                _ => panic!("points not equal"),
             }
-        }
-        Ok(())
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_text_array_as_vec_string() -> Result<(), Box<dyn std::error::Error>> {
-        let a = Spi::get_one::<Array<String>>(
+        let a = Spi::get_one::<Vec<Option<String>>>(
             "SELECT ARRAY[NULL, NULL, NULL, NULL, 'the fifth element']::text[]",
         )?
-        .expect("spi result was NULL")
-        .into_iter()
-        .collect::<Vec<_>>();
+        .expect("spi result was NULL");
         assert_eq!(a, vec![None, None, None, None, Some(String::from("the fifth element"))]);
         Ok(())
     }
 
     #[pg_test]
     fn test_text_array_iter() -> Result<(), Box<dyn std::error::Error>> {
-        let a = Spi::get_one::<Array<String>>(
-            "SELECT ARRAY[NULL, NULL, NULL, NULL, 'the fifth element']::text[]",
-        )?
-        .expect("spi result was NULL");
+        Spi::connect(|client| {
+            let a = client
+                .select(
+                    "SELECT ARRAY[NULL, NULL, NULL, NULL, 'the fifth element']::text[]",
+                    None,
+                    None,
+                )?
+                .first()
+                .get_one::<Array<String>>()?
+                .expect("spi result was NULL");
 
-        let mut iter = a.iter();
+            let mut iter = a.iter();
 
-        assert_eq!(iter.next(), Some(None));
-        assert_eq!(iter.next(), Some(None));
-        assert_eq!(iter.next(), Some(None));
-        assert_eq!(iter.next(), Some(None));
-        assert_eq!(iter.next(), Some(Some(String::from("the fifth element"))));
-        assert_eq!(iter.next(), None);
+            assert_eq!(iter.next(), Some(None));
+            assert_eq!(iter.next(), Some(None));
+            assert_eq!(iter.next(), Some(None));
+            assert_eq!(iter.next(), Some(None));
+            assert_eq!(iter.next(), Some(Some(String::from("the fifth element"))));
+            assert_eq!(iter.next(), None);
 
-        Ok(())
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_text_array_via_getter() -> Result<(), Box<dyn std::error::Error>> {
-        let a = Spi::get_one::<Array<String>>(
-            "SELECT ARRAY[NULL, NULL, NULL, NULL, 'the fifth element']::text[]",
-        )?
-        .expect("spi result was NULL");
+        Spi::connect(|client| {
+            let a = client
+                .select(
+                    "SELECT ARRAY[NULL, NULL, NULL, NULL, 'the fifth element']::text[]",
+                    None,
+                    None,
+                )?
+                .first()
+                .get_one::<Array<String>>()?
+                .expect("spi result was NULL");
 
-        assert_eq!(a.get(0), Some(None));
-        assert_eq!(a.get(1), Some(None));
-        assert_eq!(a.get(2), Some(None));
-        assert_eq!(a.get(3), Some(None));
-        assert_eq!(a.get(4), Some(Some(String::from("the fifth element"))));
-        assert_eq!(a.get(5), None);
+            assert_eq!(a.get(0), Some(None));
+            assert_eq!(a.get(1), Some(None));
+            assert_eq!(a.get(2), Some(None));
+            assert_eq!(a.get(3), Some(None));
+            assert_eq!(a.get(4), Some(Some(String::from("the fifth element"))));
+            assert_eq!(a.get(5), None);
 
-        Ok(())
+            Ok(())
+        })
     }
 }

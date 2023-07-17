@@ -641,32 +641,32 @@ mod tests {
 
     #[pg_test]
     fn test_gets_name_field() {
-        let retval = Spi::get_one::<&str>(
+        let retval = Spi::get_one::<String>(
             "
             SELECT gets_name_field(ROW('Nami', 0)::Dog)
         ",
         );
-        assert_eq!(retval, Ok(Some("Nami")));
+        assert_eq!(retval, Ok(Some("Nami".to_string())));
     }
 
     #[pg_test]
     fn test_gets_name_field_default() {
-        let retval = Spi::get_one::<&str>(
+        let retval = Spi::get_one::<String>(
             "
             SELECT gets_name_field_default()
         ",
         );
-        assert_eq!(retval, Ok(Some("Nami")));
+        assert_eq!(retval, Ok(Some("Nami".to_string())));
     }
 
     #[pg_test]
     fn test_gets_name_field_strict() {
-        let retval = Spi::get_one::<&str>(
+        let retval = Spi::get_one::<String>(
             "
             SELECT gets_name_field_strict(ROW('Nami', 0)::Dog)
         ",
         );
-        assert_eq!(retval, Ok(Some("Nami")));
+        assert_eq!(retval, Ok(Some("Nami".to_string())));
     }
 
     #[pg_test]

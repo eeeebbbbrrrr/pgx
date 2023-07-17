@@ -43,8 +43,8 @@ mod tests {
 
     #[pg_test]
     fn test_gzip_text() {
-        let result = Spi::get_one::<&str>("SELECT gunzip_as_text(gzip('hi there'));");
-        assert_eq!(result, Ok(Some("hi there")));
+        let result = Spi::get_one::<String>("SELECT gunzip_as_text(gzip('hi there'));");
+        assert_eq!(result, Ok(Some("hi there".to_string())));
     }
 
     #[pg_test]

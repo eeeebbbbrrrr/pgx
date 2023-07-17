@@ -128,7 +128,7 @@ fn fcinfo_not_named_no_arg(fcinfo: pg_sys::FunctionCallInfo) -> i32 {
     todo!()
 }
 
-#[derive(PostgresType, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Copy, Clone, PostgresType, Serialize, Deserialize, Debug, PartialEq)]
 #[inoutfuncs]
 pub struct NullStrict {}
 
@@ -144,7 +144,7 @@ impl InOutFuncs for NullStrict {
     // doesn't define a NULL_ERROR_MESSAGE
 }
 
-#[derive(PostgresType, Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Copy, Clone, PostgresType, Serialize, Deserialize, Debug, PartialEq)]
 #[inoutfuncs]
 pub struct NullError {}
 

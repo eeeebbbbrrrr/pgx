@@ -74,8 +74,8 @@ mod tests {
     #[pg_test]
     fn test_hello_default_schema() {
         assert_eq!(
-            Ok(Some("Hello from the schema where you installed this extension")),
-            Spi::get_one::<&str>("SELECT hello_default_schema()")
+            Ok(Some("Hello from the schema where you installed this extension".to_string())),
+            Spi::get_one::<String>("SELECT hello_default_schema()")
         );
     }
 
@@ -93,9 +93,9 @@ mod tests {
     #[pg_test]
     fn test_hello_some_schema() {
         assert_eq!(
-            Ok(Some("Hello from some_schema")),
+            Ok(Some("Hello from some_schema".to_string())),
             // "hello_some_schema()" is in "some_schema", so it needs to be qualified
-            Spi::get_one::<&str>("SELECT some_schema.hello_some_schema()")
+            Spi::get_one::<String>("SELECT some_schema.hello_some_schema()")
         );
     }
 
@@ -131,8 +131,8 @@ mod tests {
     #[pg_test]
     fn test_hello_public() {
         assert_eq!(
-            Ok(Some("Hello from the public schema")),
-            Spi::get_one::<&str>("SELECT hello_public()")
+            Ok(Some("Hello from the public schema".to_string())),
+            Spi::get_one::<String>("SELECT hello_public()")
         );
     }
 }

@@ -75,7 +75,7 @@ mod tests {
         };
     }
 
-    roundtrip!(rt_bytea, test_rt_bytea, &'static [u8], [b'a', b'b', b'c'].as_slice());
+    roundtrip!(rt_bytea, test_rt_bytea, Vec<u8>, vec![b'a', b'b', b'c']);
     roundtrip!(rt_char, test_rt_char, char, 'a');
     roundtrip!(rt_i8, test_rt_i8, i8, i8::MAX);
     roundtrip!(rt_point, test_rt_point, pg_sys::Point, pg_sys::Point { x: 1.0, y: 2.0 });
@@ -94,7 +94,6 @@ mod tests {
     );
     roundtrip!(rt_i64, test_rt_i64, i64, i64::MAX);
     roundtrip!(rt_i32, test_rt_i32, i32, i32::MAX);
-    roundtrip!(rt_refstr, test_rt_refstr, &'static str, "foo");
     roundtrip!(rt_bool, test_rt_bool, bool, true);
     roundtrip!(rt_f32, test_rt_f32, f32, f32::MAX);
     roundtrip!(rt_numeric, test_rt_numeric, Numeric<100,0>, Numeric::from_str("31241234123412341234").unwrap());
@@ -133,7 +132,7 @@ mod tests {
     );
 
     roundtrip!(rt_random_data, test_rt_random_data, RandomData, RandomData::random());
-    roundtrip!(rt_complex, test_rt_complex, PgBox<Complex>, Complex::random());
+    roundtrip!(rt_complex, test_rt_complex, Complex, Complex::random());
 
     // -----------
     // arrays of the above
@@ -142,13 +141,13 @@ mod tests {
     roundtrip!(
         rt_array_bytea,
         test_rt_array_bytea,
-        Vec<Option<&'static [u8]>>,
+        Vec<Option<Vec<u8>>>,
         vec![
             None,
-            Some([b'a', b'b', b'c'].as_slice()),
-            Some([b'd', b'e', b'f'].as_slice()),
+            Some(vec![b'a', b'b', b'c']),
+            Some(vec![b'd', b'e', b'f']),
             None,
-            Some([b'g', b'h', b'i'].as_slice()),
+            Some(vec![b'g', b'h', b'i']),
             None
         ]
     );
@@ -249,12 +248,6 @@ mod tests {
         test_rt_array_i32,
         Vec<Option<i32>>,
         vec![None, Some(i32::MIN), Some(i32::MAX), None, Some(42), None]
-    );
-    roundtrip!(
-        rt_array_refstr,
-        test_rt_array_refstr,
-        Vec<Option<&'static str>>,
-        vec![None, Some("foo"), Some("bar"), None, Some("baz"), None]
     );
     roundtrip!(
         rt_array_bool,
@@ -417,7 +410,7 @@ mod tests {
     roundtrip!(
         rt_array_complex,
         test_rt_array_complex,
-        Vec<Option<PgBox<Complex>>>,
+        Vec<Option<Complex>>,
         vec![
             None,
             Some(Complex::random()),

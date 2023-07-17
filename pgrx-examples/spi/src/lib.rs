@@ -119,10 +119,10 @@ fn issue1209_fixed() -> Result<Option<String>, Box<dyn std::error::Error>> {
     let res = Spi::connect(|c| {
         let mut cursor = c.open_cursor("SELECT 'hello' FROM generate_series(1, 10000)", None);
         let table = cursor.fetch(10000)?;
-        table.into_iter().map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
+        table.into_iter().map(|row| row.get::<String>(1)).collect::<Result<Vec<_>, _>>()
     })?;
 
-    Ok(res.first().cloned().flatten().map(|s| s.to_string()))
+    Ok(res.first().cloned().flatten())
 }
 
 #[pg_extern]
@@ -185,9 +185,8 @@ mod tests {
 
     #[pg_test]
     fn test_spi_query_by_id_via_spi() {
-        let result = Spi::get_one::<&str>("SELECT spi.spi_query_by_id(1)");
-
-        assert_eq!(Ok(Some("This is a test")), result);
+        let result = Spi::get_one::<String>("SELECT spi.spi_query_by_id(1)");
+        assert_eq!(Ok(Some("This is a test".to_string())), result);
     }
 }
 

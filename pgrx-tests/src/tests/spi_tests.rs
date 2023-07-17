@@ -40,22 +40,12 @@ mod tests {
     }
 
     #[pg_test]
-    fn test_spi_returns_str() -> Result<(), spi::Error> {
-        let rc = Spi::connect(|client| {
-            client.select("SELECT 'this is a test'", None, None)?.first().get::<&str>(1)
-        })?;
-
-        assert_eq!(Some("this is a test"), rc);
-        Ok(())
-    }
-
-    #[pg_test]
     fn test_spi_returns_string() -> Result<(), spi::Error> {
         let rc = Spi::connect(|client| {
-            client.select("SELECT 'this is a test'", None, None)?.first().get::<&str>(1)
+            client.select("SELECT 'this is a test'", None, None)?.first().get::<String>(1)
         })?;
 
-        assert_eq!(Some("this is a test"), rc);
+        assert_eq!(Some("this is a test".to_string()), rc);
         Ok(())
     }
 
@@ -508,18 +498,5 @@ mod tests {
         assert_eq!("'quoted'", spi::quote_literal("quoted"));
         assert_eq!("'quoted-with-''quotes'''", spi::quote_literal("quoted-with-'quotes'"));
         assert_eq!("'quoted-string'", spi::quote_literal(String::from("quoted-string")));
-    }
-
-    #[pg_test]
-    fn can_return_borrowed_str() -> Result<(), Box<dyn Error>> {
-        let res = Spi::connect(|c| {
-            let mut cursor = c.open_cursor("SELECT 'hello' FROM generate_series(1, 10000)", None);
-            let table = cursor.fetch(10000)?;
-            table.into_iter().map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
-        })?;
-
-        let value = res.first().cloned().flatten().map(|s| s.to_string());
-        assert_eq!(Some("hello".to_string()), value);
-        Ok(())
     }
 }

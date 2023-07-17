@@ -70,7 +70,7 @@ impl PgVarlenaInOutFuncs for VarlenaEnumType {
     }
 }
 
-#[derive(Serialize, Deserialize, PostgresType)]
+#[derive(Copy, Clone, Serialize, Deserialize, PostgresType)]
 #[inoutfuncs]
 pub struct CustomTextFormatSerializedType {
     a: f32,
@@ -104,7 +104,7 @@ fn fn_takes_option(input: Option<CustomTextFormatSerializedType>) -> String {
     })
 }
 
-#[derive(Serialize, Deserialize, PostgresType)]
+#[derive(Copy, Clone, Serialize, Deserialize, PostgresType)]
 #[inoutfuncs]
 pub enum CustomTextFormatSerializedEnumType {
     A,
@@ -139,14 +139,14 @@ fn fn_takes_option_enum(input: Option<CustomTextFormatSerializedEnumType>) -> St
     })
 }
 
-#[derive(Serialize, Deserialize, PostgresType)]
+#[derive(Copy, Clone, Serialize, Deserialize, PostgresType)]
 pub struct JsonType {
     a: f32,
     b: f32,
     c: i64,
 }
 
-#[derive(Serialize, Deserialize, PostgresType)]
+#[derive(Copy, Clone, Serialize, Deserialize, PostgresType)]
 #[serde(tag = "type")]
 pub enum JsonEnumType {
     E1 { a: f32 },
@@ -168,20 +168,30 @@ mod tests {
 
     #[pg_test]
     fn test_mytype() -> Result<(), pgrx::spi::Error> {
-        let result =
-            Spi::get_one::<PgVarlena<VarlenaType>>("SELECT '1.0,2.0,3'::VarlenaType")?.unwrap();
-        assert_eq!(result.a, 1.0);
-        assert_eq!(result.b, 2.0);
-        assert_eq!(result.c, 3);
-        Ok(())
+        Spi::connect(|client| {
+            let result = client
+                .select("SELECT '1.0,2.0,3'::VarlenaType", None, None)?
+                .first()
+                .get_one::<PgVarlena<VarlenaType>>()?
+                .unwrap();
+            assert_eq!(result.a, 1.0);
+            assert_eq!(result.b, 2.0);
+            assert_eq!(result.c, 3);
+            Ok(())
+        })
     }
 
     #[pg_test]
     fn test_my_enum_type() -> Result<(), pgrx::spi::Error> {
-        let result =
-            Spi::get_one::<PgVarlena<VarlenaEnumType>>("SELECT 'B'::VarlenaEnumType")?.unwrap();
-        assert!(matches!(*result, VarlenaEnumType::B));
-        Ok(())
+        Spi::connect(|client| {
+            let result = client
+                .select("SELECT 'B'::VarlenaEnumType", None, None)?
+                .first()
+                .get_one::<PgVarlena<VarlenaEnumType>>()?
+                .unwrap();
+            assert!(matches!(*result, VarlenaEnumType::B));
+            Ok(())
+        })
     }
 
     #[pg_test]

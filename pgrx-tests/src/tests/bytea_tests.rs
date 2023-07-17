@@ -22,19 +22,13 @@ mod tests {
 
     #[pg_test]
     fn test_return_bytes() {
-        let bytes = Spi::get_one::<&[u8]>("SELECT tests.return_bytes();");
-        assert_eq!(bytes, Ok(Some(b"bytes".as_slice())));
+        let bytes = Spi::get_one::<Vec<u8>>("SELECT tests.return_bytes();");
+        assert_eq!(bytes, Ok(Some(b"bytes".to_vec())));
     }
 
     #[pg_extern]
     fn return_bytes_slice(bytes: &[u8]) -> &[u8] {
         &bytes[1..=3]
-    }
-
-    #[pg_test]
-    fn test_return_bytes_slice() {
-        let slice = Spi::get_one::<&[u8]>("SELECT tests.return_bytes_slice('abcdefg'::bytea);");
-        assert_eq!(slice, Ok(Some(b"bcd".as_slice())));
     }
 
     #[pg_extern]

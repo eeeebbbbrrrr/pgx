@@ -576,7 +576,8 @@ mod tests {
 
     #[pg_test]
     fn test_old_date() -> Result<(), Box<dyn std::error::Error>> {
-        let array = Spi::get_one::<Array<Date>>("SELECT ARRAY['1977-07-04']::date[]")?.unwrap();
+        let array =
+            Spi::get_one::<Vec<Option<Date>>>("SELECT ARRAY['1977-07-04']::date[]")?.unwrap();
         let first = array.into_iter().next();
         assert_eq!(first, Some(Some(Date::from_str("1977-07-04")?)));
         Ok(())
