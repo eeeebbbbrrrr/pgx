@@ -106,32 +106,6 @@ mod tests {
         );
         Ok(())
     }
-
-    /*
-       #[pg_test]
-       fn test_ordering() -> Result<(), spi::Error> {
-           let buf = Spi::connect(|client| {
-               client
-                   .select("SELECT * FROM extension_sql", None, None)?
-                   .map(|tup| tup[1].value())
-                   .collect::<spi::Result<Vec<Option<String>>>>()
-           })?;
-
-           assert_eq!(
-               buf,
-               vec![
-                   Some(String::from("bootstrap")),
-                   Some(String::from("single_raw")),
-                   Some(String::from("single")),
-                   Some(String::from("multiple_raw")),
-                   Some(String::from("multiple")),
-                   Some(String::from("finalizer"))
-               ]
-           );
-           Ok(())
-       }
-
-    */
 }
 
 #[cfg(test)]
