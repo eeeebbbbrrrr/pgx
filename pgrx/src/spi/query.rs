@@ -62,11 +62,6 @@ impl<'client> Query<'client> for &str {
         limit: Option<libc::c_long>,
         arguments: Self::Arguments,
     ) -> SpiResult<SpiTupleTable<'client>> {
-        // SAFETY: no concurrent access
-        unsafe {
-            pg_sys::SPI_tuptable = std::ptr::null_mut();
-        }
-
         let src = CString::new(self).expect("query contained a null byte");
         let status_code = match arguments {
             Some(args) => {
@@ -99,7 +94,7 @@ impl<'client> Query<'client> for &str {
             },
         };
 
-        Ok(client.prepare_tuple_table(status_code)?)
+        SpiTupleTable::wrap(client, status_code)
     }
 
     fn open_cursor(self, client: &'client SpiClient, args: Self::Arguments) -> SpiCursor<'client> {
@@ -238,7 +233,7 @@ impl<'client: 'stmt, 'stmt> Query<'client> for &'stmt PreparedStatement<'client>
             )
         };
 
-        Ok(client.prepare_tuple_table(status_code)?)
+        SpiTupleTable::wrap(client, status_code)
     }
 
     fn open_cursor(self, client: &'client SpiClient, args: Self::Arguments) -> SpiCursor<'client> {
