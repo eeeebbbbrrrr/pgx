@@ -196,7 +196,7 @@ mod tests {
 
     fn sum_all(table: pgrx::spi::SpiTupleTable) -> i32 {
         table
-            .map(|r| r.get_datum_by_ordinal(1)?.value::<i32>())
+            .map(|r| r.get_one::<i32>())
             .map(|r| r.expect("failed to get ordinal #1").expect("ordinal #1 was null"))
             .sum()
     }
@@ -356,7 +356,6 @@ mod tests {
             let _b = client.select("SELECT 1 WHERE 'f'", None, None)?;
             assert!(!a.is_empty());
             assert_eq!(1, a.len());
-            assert!(a.get_heap_tuple().is_ok());
             assert_eq!(Ok(Some(1)), a.get::<i32>(1));
             Ok(())
         })
@@ -372,7 +371,6 @@ mod tests {
             let _b = client.select("SELECT 1", None, None)?;
             assert!(a.is_empty());
             assert_eq!(0, a.len());
-            assert!(a.get_heap_tuple().is_ok());
             assert_eq!(Err(pgrx::spi::Error::InvalidPosition), a.get::<i32>(1));
             Ok(())
         })
@@ -540,7 +538,7 @@ mod tests {
         let res = Spi::connect(|c| {
             let mut cursor = c.open_cursor("SELECT 'hello' FROM generate_series(1, 10000)", None);
             let table = cursor.fetch(10000)?;
-            table.into_iter().map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
+            table.map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
         })?;
 
         let value = res.first().cloned().flatten().map(|s| s.to_string());

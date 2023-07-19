@@ -87,16 +87,10 @@ mod tests {
     #[pg_test]
     fn test_ordering() -> Result<(), spi::Error> {
         let buf = Spi::connect(|client| {
-            Ok::<_, spi::Error>(
-                client
-                    .select("SELECT * FROM extension_sql", None, None)?
-                    .flat_map(|tup| {
-                        tup.get_datum_by_ordinal(1)
-                            .ok()
-                            .and_then(|ord| ord.value::<String>().ok().unwrap())
-                    })
-                    .collect::<Vec<String>>(),
-            )
+            client
+                .select("SELECT * FROM extension_sql", None, None)?
+                .map(|tup| Ok(tup.get::<String>(1)?.unwrap()))
+                .collect::<spi::Result<Vec<_>>>()
         })?;
 
         assert_eq!(

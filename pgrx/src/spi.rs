@@ -22,7 +22,7 @@ mod tuple;
 pub use client::SpiClient;
 pub use cursor::SpiCursor;
 pub use query::{OwnedPreparedStatement, PreparedStatement, Query};
-pub use tuple::{SpiHeapTupleData, SpiHeapTupleDataEntry, SpiTupleTable};
+pub use tuple::SpiTupleTable;
 
 pub type SpiResult<T> = std::result::Result<T, SpiError>;
 pub use SpiResult as Result;
