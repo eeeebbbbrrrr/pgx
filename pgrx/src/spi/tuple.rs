@@ -8,19 +8,56 @@ use crate::memcxt::PgMemoryContexts;
 use crate::pg_sys::panic::ErrorReportable;
 use crate::pg_sys::{self, PgOid};
 use crate::prelude::*;
+use crate::spi::SpiClient;
 
-use super::{SpiError, SpiErrorCodes, SpiOkCodes, SpiResult};
+use super::{SpiError, SpiErrorCodes, SpiResult};
 
 #[derive(Debug)]
 pub struct SpiTupleTable<'client> {
-    #[allow(dead_code)]
-    pub(super) status_code: SpiOkCodes,
-    pub(super) table: Option<&'client mut pg_sys::SPITupleTable>,
-    pub(super) size: usize,
-    pub(super) current: isize,
+    // SpiTupleTable borrows global state setup by the active SpiClient.  It doesn't use the client
+    // directly, but we need to make sure we don't outlive it, so here it is
+    _client: PhantomData<&'client SpiClient>,
+
+    // and this is that global state.  In ::wrap(), this comes from whatever the current value of
+    // `pg_sys::SPI_tuptable` happens to be.  Postgres may change where SPI_tuptable points
+    // throughout the lifetime of an active SpiClient, but it doesn't mutate (or deallocate) what
+    // it happens to point to  This allows us to have multiple active SpiTupleTables
+    // within a Spi connection.  Whatever this points to is freed via `pg_sys::SPI_freetuptable()`
+    // when we're dropped.
+    table: Option<NonNull<pg_sys::SPITupleTable>>,
+    size: usize,
+    current: isize,
 }
 
 impl<'client> SpiTupleTable<'client> {
+    /// Wraps the current global `pg_sys::SPI_tuptable` as a new [`SpiTupleTable`] instance, with
+    /// a lifetime tied to the specified [`SpiClient`].
+    pub(super) fn wrap(_client: &'client SpiClient, last_spi_status_code: i32) -> SpiResult<Self> {
+        Spi::check_status(last_spi_status_code)?;
+
+        unsafe {
+            //
+            // SAFETY:  The unsafeness here is that we're accessing static globals.  Fortunately,
+            // Postgres is not multi-threaded so we're okay to do this
+            //
+
+            // different Postgres get the tuptable size different ways
+            #[cfg(any(feature = "pg11", feature = "pg12"))]
+            let size = pg_sys::SPI_processed as usize;
+
+            #[cfg(not(any(feature = "pg11", feature = "pg12")))]
+            let size = if pg_sys::SPI_tuptable.is_null() {
+                pg_sys::SPI_processed as usize
+            } else {
+                (*pg_sys::SPI_tuptable).numvals as usize
+            };
+
+            let tuptable = pg_sys::SPI_tuptable;
+
+            Ok(Self { _client: PhantomData, table: NonNull::new(tuptable), size, current: -1 })
+        }
+    }
+
     /// `SpiTupleTable`s are positioned before the start, for iteration purposes.
     ///
     /// This method moves the position to the first row.  If there are no rows, this
@@ -76,9 +113,12 @@ impl<'client> SpiTupleTable<'client> {
     fn get_spi_tuptable(
         &self,
     ) -> SpiResult<(*mut pg_sys::SPITupleTable, *mut pg_sys::TupleDescData)> {
-        let table = self.table.as_deref().ok_or(SpiError::NoTupleTable)?;
-        // SAFETY:  we just assured that `table` is not null
-        Ok((table as *const _ as *mut _, table.tupdesc))
+        let table = self.table.map(|table| table.as_ptr()).ok_or(SpiError::NoTupleTable)?;
+        let tupdesc = unsafe {
+            // SAFETY:  we just assured that `table` is not null
+            table.as_mut().unwrap().tupdesc
+        };
+        Ok((table, tupdesc))
     }
 
     pub fn get_heap_tuple(&self) -> SpiResult<Option<SpiHeapTupleData<'client>>> {
@@ -295,6 +335,18 @@ impl<'client> Iterator for SpiTupleTable<'client> {
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(self.size))
+    }
+}
+
+impl Drop for SpiTupleTable<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            // SAFETY:  self.table was created by Postgres from whatever `pg_sys::SPI_tuptable` pointed
+            // to at the time this SpiTupleTable was constructed
+            if let Some(ptr) = self.table.take() {
+                pg_sys::SPI_freetuptable(ptr.as_ptr())
+            }
+        }
     }
 }
 

@@ -3,7 +3,7 @@ use std::ptr::NonNull;
 
 use crate::pg_sys;
 
-use super::{SpiClient, SpiError, SpiOkCodes, SpiTupleTable};
+use super::{SpiClient, SpiOkCodes, SpiResult, SpiTupleTable};
 
 type CursorName = String;
 
@@ -67,18 +67,14 @@ pub struct SpiCursor<'client> {
     pub(crate) client: &'client SpiClient,
 }
 
-impl SpiCursor<'_> {
+impl<'client> SpiCursor<'client> {
     /// Fetch up to `count` rows from the cursor, moving forward
     ///
     /// If `fetch` runs off the end of the available rows, an empty [`SpiTupleTable`] is returned.
-    pub fn fetch(&mut self, count: libc::c_long) -> std::result::Result<SpiTupleTable, SpiError> {
-        // SAFETY: no concurrent access
-        unsafe {
-            pg_sys::SPI_tuptable = std::ptr::null_mut();
-        }
+    pub fn fetch(&mut self, count: libc::c_long) -> SpiResult<SpiTupleTable<'client>> {
         // SAFETY: SPI functions to create/find cursors fail via elog, so self.ptr is valid if we successfully set it
         unsafe { pg_sys::SPI_cursor_fetch(self.ptr.as_mut(), true, count) }
-        Ok(self.client.prepare_tuple_table(SpiOkCodes::Fetch as i32)?)
+        SpiTupleTable::wrap(&self.client, SpiOkCodes::Fetch as i32)
     }
 
     /// Consume the cursor, returning its name

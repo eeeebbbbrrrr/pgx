@@ -243,6 +243,31 @@ mod tests {
     }
 
     #[pg_test]
+    fn two_cursors_at_the_same_time() -> Result<(), pgrx::spi::Error> {
+        Spi::connect(|client| {
+            let mut cursor1 = client.open_cursor("SELECT * FROM generate_series(1, 20)", None);
+            let mut cursor2 = client.open_cursor("SELECT * FROM generate_series(40, 60)", None);
+
+            let first_5 = cursor1.fetch(5)?;
+            let second_5 = cursor2.fetch(5)?;
+
+            let first_5 = Vec::from_iter(first_5.map(|row| row.get::<i32>(1)));
+            let second_5 = Vec::from_iter(second_5.map(|row| row.get::<i32>(1)));
+
+            assert_eq!(
+                first_5,
+                vec![Ok(Some(1)), Ok(Some(2)), Ok(Some(3)), Ok(Some(4)), Ok(Some(5))]
+            );
+            assert_eq!(
+                second_5,
+                vec![Ok(Some(40)), Ok(Some(41)), Ok(Some(42)), Ok(Some(43)), Ok(Some(44))]
+            );
+
+            Ok(())
+        })
+    }
+
+    #[pg_test]
     fn test_cursor_by_name() -> Result<(), pgrx::spi::Error> {
         let cursor_name = Spi::connect(|client| {
             client.update("CREATE TABLE tests.cursor_table (id int)", None, None)?;

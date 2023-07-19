@@ -5,6 +5,7 @@ use std::ptr::NonNull;
 use crate::pg_sys::{self, PgOid};
 use crate::spi::{PreparedStatement, Query, Spi, SpiCursor, SpiError, SpiResult, SpiTupleTable};
 
+#[derive(Debug)]
 pub struct SpiClient {
     // We need `SpiClient` to be publicly accessible but not constructable because we rely
     // on it being properly constructed in order for its Drop impl, which calles `pg_sys::SPI_finish()`,
@@ -74,29 +75,6 @@ impl SpiClient {
     ) -> SpiResult<SpiTupleTable<'client>> {
         Spi::mark_mutable();
         query.execute(self, limit, args)
-    }
-
-    pub(super) fn prepare_tuple_table(
-        &self,
-        status_code: i32,
-    ) -> std::result::Result<SpiTupleTable, SpiError> {
-        Ok(SpiTupleTable {
-            status_code: Spi::check_status(status_code)?,
-            // SAFETY: no concurrent access
-            table: unsafe { pg_sys::SPI_tuptable.as_mut()},
-            #[cfg(any(feature = "pg11", feature = "pg12"))]
-            size: unsafe { pg_sys::SPI_processed as usize },
-            #[cfg(not(any(feature = "pg11", feature = "pg12")))]
-            // SAFETY: no concurrent access
-            size: unsafe {
-                if pg_sys::SPI_tuptable.is_null() {
-                    pg_sys::SPI_processed as usize
-                } else {
-                    (*pg_sys::SPI_tuptable).numvals as usize
-                }
-            },
-            current: -1,
-        })
     }
 
     /// Set up a cursor that will execute the specified query
