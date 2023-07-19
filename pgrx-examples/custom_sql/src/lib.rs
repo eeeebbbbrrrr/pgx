@@ -87,16 +87,10 @@ mod tests {
     #[pg_test]
     fn test_ordering() -> Result<(), spi::Error> {
         let buf = Spi::connect(|client| {
-            Ok::<_, spi::Error>(
-                client
-                    .select("SELECT * FROM extension_sql", None, None)?
-                    .flat_map(|tup| {
-                        tup.get_datum_by_ordinal(1)
-                            .ok()
-                            .and_then(|ord| ord.value::<String>().ok().unwrap())
-                    })
-                    .collect::<Vec<String>>(),
-            )
+            client
+                .select("SELECT * FROM extension_sql", None, None)?
+                .map(|tup| Ok(tup.get::<String>(1)?.unwrap()))
+                .collect::<spi::Result<Vec<_>>>()
         })?;
 
         assert_eq!(
@@ -112,6 +106,32 @@ mod tests {
         );
         Ok(())
     }
+
+    /*
+       #[pg_test]
+       fn test_ordering() -> Result<(), spi::Error> {
+           let buf = Spi::connect(|client| {
+               client
+                   .select("SELECT * FROM extension_sql", None, None)?
+                   .map(|tup| tup[1].value())
+                   .collect::<spi::Result<Vec<Option<String>>>>()
+           })?;
+
+           assert_eq!(
+               buf,
+               vec![
+                   Some(String::from("bootstrap")),
+                   Some(String::from("single_raw")),
+                   Some(String::from("single")),
+                   Some(String::from("multiple_raw")),
+                   Some(String::from("multiple")),
+                   Some(String::from("finalizer"))
+               ]
+           );
+           Ok(())
+       }
+
+    */
 }
 
 #[cfg(test)]

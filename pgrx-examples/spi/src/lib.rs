@@ -119,7 +119,7 @@ fn issue1209_fixed() -> Result<Option<String>, Box<dyn std::error::Error>> {
     let res = Spi::connect(|c| {
         let mut cursor = c.open_cursor("SELECT 'hello' FROM generate_series(1, 10000)", None);
         let table = cursor.fetch(10000)?;
-        table.into_iter().map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
+        table.map(|row| row.get::<&str>(1)).collect::<Result<Vec<_>, _>>()
     })?;
 
     Ok(res.first().cloned().flatten().map(|s| s.to_string()))
