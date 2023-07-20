@@ -18,17 +18,20 @@ use std::mem;
 mod client;
 mod cursor;
 mod query;
+mod safe;
 mod tuple;
+
 pub use client::SpiClient;
 pub use cursor::SpiCursor;
 pub use query::{OwnedPreparedStatement, PreparedStatement, Query};
+pub use safe::SpiSafe;
 pub use tuple::SpiTupleTable;
 
 pub type SpiResult<T> = std::result::Result<T, SpiError>;
 pub use SpiResult as Result;
 
 /// These match the Postgres `#define`d constants prefixed `SPI_OK_*` that you can find in `pg_sys`.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[repr(i32)]
 #[non_exhaustive]
 pub enum SpiOkCodes {
@@ -56,7 +59,7 @@ pub enum SpiOkCodes {
 /// These match the Postgres `#define`d constants prefixed `SPI_ERROR_*` that you can find in `pg_sys`.
 /// It is hypothetically possible for a Postgres-defined status code to be `0`, AKA `NULL`, however,
 /// this should not usually occur in Rust code paths. If it does happen, please report such bugs to the pgrx repo.
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, Copy, Clone, PartialEq)]
 #[repr(i32)]
 pub enum SpiErrorCodes {
     Connect = -1,
@@ -161,7 +164,7 @@ impl TryFrom<libc::c_int> for SpiErrorCodes {
 }
 
 /// Set of possible errors `pgrx` might return while working with Postgres SPI
-#[derive(thiserror::Error, Debug, PartialEq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq)]
 pub enum SpiError {
     /// An underlying [`SpiErrorCodes`] given to us by Postgres
     #[error("SPI error: {0:?}")]
@@ -239,34 +242,37 @@ impl Spi {
         }
     }
 
-    pub fn get_one<A: FromDatum + IntoDatum>(query: &str) -> Result<Option<A>> {
+    pub fn get_one<A: FromDatum + IntoDatum + SpiSafe>(query: &str) -> Result<Option<A>> {
         Spi::connect(|client| client.update(query, Some(1), None)?.first().get_one())
     }
 
-    pub fn get_two<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two<A: FromDatum + IntoDatum + SpiSafe, B: FromDatum + IntoDatum + SpiSafe>(
         query: &str,
     ) -> Result<(Option<A>, Option<B>)> {
         Spi::connect(|client| client.update(query, Some(1), None)?.first().get_two::<A, B>())
     }
 
     pub fn get_three<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: FromDatum + IntoDatum + SpiSafe,
+        B: FromDatum + IntoDatum + SpiSafe,
+        C: FromDatum + IntoDatum + SpiSafe,
     >(
         query: &str,
     ) -> Result<(Option<A>, Option<B>, Option<C>)> {
         Spi::connect(|client| client.update(query, Some(1), None)?.first().get_three::<A, B, C>())
     }
 
-    pub fn get_one_with_args<A: FromDatum + IntoDatum>(
+    pub fn get_one_with_args<A: FromDatum + IntoDatum + SpiSafe>(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
     ) -> Result<Option<A>> {
         Spi::connect(|client| client.update(query, Some(1), Some(args))?.first().get_one())
     }
 
-    pub fn get_two_with_args<A: FromDatum + IntoDatum, B: FromDatum + IntoDatum>(
+    pub fn get_two_with_args<
+        A: FromDatum + IntoDatum + SpiSafe,
+        B: FromDatum + IntoDatum + SpiSafe,
+    >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
     ) -> Result<(Option<A>, Option<B>)> {
@@ -274,9 +280,9 @@ impl Spi {
     }
 
     pub fn get_three_with_args<
-        A: FromDatum + IntoDatum,
-        B: FromDatum + IntoDatum,
-        C: FromDatum + IntoDatum,
+        A: FromDatum + IntoDatum + SpiSafe,
+        B: FromDatum + IntoDatum + SpiSafe,
+        C: FromDatum + IntoDatum + SpiSafe,
     >(
         query: &str,
         args: Vec<(PgOid, Option<pg_sys::Datum>)>,
@@ -361,7 +367,7 @@ impl Spi {
     /// This function will panic if for some reason it's unable to "connect" to Postgres' SPI
     /// system.  At the time of this writing, that's actually impossible as the underlying function
     /// ([`pg_sys::SPI_connect()`]) **always** returns a successful response.
-    pub fn connect<R, F: FnOnce(&mut SpiClient) -> R>(f: F) -> R {
+    pub fn connect<R: SpiSafe, F: FnOnce(&mut SpiClient) -> R>(f: F) -> R {
         // connect to SPI
         //
         // Postgres documents (https://www.postgresql.org/docs/current/spi-spi-connect.html) that

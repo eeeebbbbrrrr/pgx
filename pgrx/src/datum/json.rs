@@ -18,15 +18,15 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 /// A `json` type from PostgreSQL
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Json(pub Value);
 
 /// A `jsonb` type from PostgreSQL
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JsonB(pub Value);
 
 /// A wholly Rust-[`String`][std::string::String] owned copy of a `json` type from PostgreSQL
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JsonString(pub String);
 
 /// for json

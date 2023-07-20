@@ -125,6 +125,13 @@ fn issue1209_fixed() -> Result<Option<String>, Box<dyn std::error::Error>> {
     Ok(res.first().cloned().flatten().map(|s| s.to_string()))
 }
 
+#[pg_extern]
+fn return_from_spi() -> Result<(), Box<dyn std::error::Error>> {
+    struct MyType;
+    let result = Spi::connect(|_| MyType);
+    Ok(())
+}
+
 extension_sql!(
     r#"
 
