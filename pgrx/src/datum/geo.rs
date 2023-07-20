@@ -10,6 +10,8 @@
 use crate::{pg_sys, FromDatum, IntoDatum, PgMemoryContexts};
 
 impl FromDatum for pg_sys::BOX {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,
@@ -42,6 +44,8 @@ impl IntoDatum for pg_sys::BOX {
 }
 
 impl FromDatum for pg_sys::Point {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

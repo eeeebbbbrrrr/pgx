@@ -67,6 +67,8 @@ impl From<TimestampWithTimeZone> for TimeWithTimeZone {
 }
 
 impl FromDatum for TimeWithTimeZone {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

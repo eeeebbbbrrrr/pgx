@@ -10,6 +10,8 @@
 use crate::{pg_sys, varsize_any, AnyNumeric, FromDatum, IntoDatum, Numeric};
 
 impl FromDatum for AnyNumeric {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -73,6 +75,8 @@ impl IntoDatum for AnyNumeric {
 }
 
 impl<const P: u32, const S: u32> FromDatum for Numeric<P, S> {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

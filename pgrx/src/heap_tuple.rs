@@ -59,6 +59,15 @@ pub struct PgHeapTuple<'a, AllocatedBy: WhoAllocated> {
 }
 
 impl<'a> FromDatum for PgHeapTuple<'a, AllocatedByRust> {
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
+
     unsafe fn from_polymorphic_datum(
         composite: pg_sys::Datum,
         is_null: bool,

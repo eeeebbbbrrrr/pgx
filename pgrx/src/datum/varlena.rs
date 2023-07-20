@@ -12,7 +12,7 @@ use crate::pg_sys::{VARATT_SHORT_MAX, VARHDRSZ_SHORT};
 use crate::{
     pg_sys, rust_regtypein, set_varsize, set_varsize_short, vardata_any, varsize_any,
     varsize_any_exhdr, void_mut_ptr, FromDatum, IntoDatum, PgMemoryContexts, PostgresType,
-    StringInfo,
+    StringInfo, TryFromDatumError,
 };
 use pgrx_pg_sys::varlena;
 use pgrx_sql_entity_graph::metadata::{
@@ -344,6 +344,15 @@ impl<T> FromDatum for PgVarlena<T>
 where
     T: Copy + Sized,
 {
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,
@@ -396,6 +405,8 @@ impl<'de, T> FromDatum for T
 where
     T: PostgresType + Deserialize<'de>,
 {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

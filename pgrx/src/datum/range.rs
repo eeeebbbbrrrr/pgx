@@ -307,6 +307,8 @@ impl<T> FromDatum for Range<T>
 where
     T: RangeSubType,
 {
+    type SpiSafe = Self;
+
     /// ## Safety
     /// function requires that
     /// - is_null is true OR datum represents a PG RangeType datum

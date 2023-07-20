@@ -7,7 +7,7 @@
 //LICENSE All rights reserved.
 //LICENSE
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
-use crate::{pg_sys, FromDatum, IntoDatum};
+use crate::{pg_sys, FromDatum, IntoDatum, TryFromDatumError};
 use pgrx_sql_entity_graph::metadata::{
     ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
 };
@@ -48,6 +48,15 @@ impl AnyElement {
 
 impl FromDatum for AnyElement {
     const GET_TYPOID: bool = true;
+
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
 
     /// You should **never** call this function to make this type; it will unconditionally panic.
     /// For polymorphic types such as this one, you must use [`FromDatum::from_polymorphic_datum`]

@@ -31,6 +31,8 @@ pub struct JsonString(pub String);
 
 /// for json
 impl FromDatum for Json {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -52,6 +54,8 @@ impl FromDatum for Json {
 
 /// for jsonb
 impl FromDatum for JsonB {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,
@@ -92,6 +96,8 @@ impl FromDatum for JsonB {
 ///
 /// This returns a **copy**, allocated and managed by Rust, of the underlying `varlena` Datum
 impl FromDatum for JsonString {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

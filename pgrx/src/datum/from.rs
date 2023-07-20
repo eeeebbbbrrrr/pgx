@@ -32,6 +32,9 @@ pub enum TryFromDatumError {
 
     #[error("The specified attribute name `{0}` is not present")]
     NoSuchAttributeName(String),
+
+    #[error("This type is not safe to return from an SPI connection")]
+    NotSpiSafe,
 }
 
 /// Convert a `(pg_sys::Datum, is_null:bool)` pair into a Rust type
@@ -43,6 +46,17 @@ pub enum TryFromDatumError {
 pub trait FromDatum {
     /// Should a type OID be fetched when calling `from_datum`?
     const GET_TYPOID: bool = false;
+
+    /// When SPI wants to return the thing that impls [`FromDatum`], this is the type it should really return
+    type SpiSafe;
+
+    /// Convert this instantiated Datum into something that is safe to return from an SPI connection
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
 
     /// ## Safety
     ///
@@ -172,6 +186,8 @@ pub(crate) fn lookup_type_name(oid: pg_sys::Oid) -> String {
 
 /// for pg_sys::Datum
 impl FromDatum for pg_sys::Datum {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -187,6 +203,8 @@ impl FromDatum for pg_sys::Datum {
 }
 
 impl FromDatum for pg_sys::Oid {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -207,6 +225,8 @@ impl FromDatum for pg_sys::Oid {
 
 /// for bool
 impl FromDatum for bool {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -223,6 +243,8 @@ impl FromDatum for bool {
 
 /// for `"char"`
 impl FromDatum for i8 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -239,6 +261,8 @@ impl FromDatum for i8 {
 
 /// for smallint
 impl FromDatum for i16 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -255,6 +279,8 @@ impl FromDatum for i16 {
 
 /// for integer
 impl FromDatum for i32 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -271,6 +297,8 @@ impl FromDatum for i32 {
 
 /// for oid
 impl FromDatum for u32 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -287,6 +315,8 @@ impl FromDatum for u32 {
 
 /// for bigint
 impl FromDatum for i64 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -303,6 +333,8 @@ impl FromDatum for i64 {
 
 /// for real
 impl FromDatum for f32 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -319,6 +351,8 @@ impl FromDatum for f32 {
 
 /// for double precision
 impl FromDatum for f64 {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -339,6 +373,15 @@ impl FromDatum for f64 {
 /// UTF-8 correctness, so they may panic if you use PGX with a database
 /// that has non-UTF-8 data. The details of this are subject to change.
 impl<'a> FromDatum for &'a str {
+    type SpiSafe = String;
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok(self.to_string())
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -411,6 +454,8 @@ unsafe fn convert_varlena_to_str_memoized<'a>(varlena: *const pg_sys::varlena) -
 /// UTF-8 correctness, so they may panic if you use PGX with a database
 /// that has non-UTF-8 data. The details of this are subject to change.
 impl FromDatum for String {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -422,6 +467,8 @@ impl FromDatum for String {
 }
 
 impl FromDatum for char {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -435,6 +482,8 @@ impl FromDatum for char {
 
 /// for cstring
 impl<'a> FromDatum for &'a core::ffi::CStr {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -470,6 +519,15 @@ impl<'a> FromDatum for &'a core::ffi::CStr {
 
 /// for bytea
 impl<'a> FromDatum for &'a [u8] {
+    type SpiSafe = Vec<u8>;
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok(self.to_vec())
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -511,6 +569,8 @@ impl<'a> FromDatum for &'a [u8] {
 }
 
 impl FromDatum for Vec<u8> {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -535,6 +595,8 @@ impl FromDatum for Vec<u8> {
 
 /// for VOID -- always converts to `Some(())`, even if the "is_null" argument is true
 impl FromDatum for () {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         _datum: pg_sys::Datum,
@@ -547,6 +609,15 @@ impl FromDatum for () {
 
 /// for user types
 impl<T> FromDatum for PgBox<T, AllocatedByPostgres> {
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

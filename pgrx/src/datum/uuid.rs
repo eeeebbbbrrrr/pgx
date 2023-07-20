@@ -41,6 +41,8 @@ impl IntoDatum for Uuid {
 }
 
 impl FromDatum for Uuid {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

@@ -12,6 +12,8 @@ use crate::{
 };
 
 impl FromDatum for pg_sys::ItemPointerData {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

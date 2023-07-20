@@ -90,6 +90,8 @@ impl<'de> Deserialize<'de> for Inet {
 }
 
 impl FromDatum for Inet {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

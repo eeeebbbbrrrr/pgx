@@ -90,6 +90,8 @@ impl IntoDatum for Timestamp {
 }
 
 impl FromDatum for Timestamp {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

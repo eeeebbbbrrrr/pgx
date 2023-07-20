@@ -218,6 +218,8 @@ impl Interval {
 }
 
 impl FromDatum for Interval {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

@@ -10,6 +10,7 @@
 //! Provides a safe wrapper around Postgres' `pg_sys::RelationData` struct
 use crate::{
     direct_function_call, name_data_to_str, pg_sys, FromDatum, IntoDatum, PgBox, PgTupleDesc,
+    TryFromDatumError,
 };
 use pgrx_sql_entity_graph::metadata::{
     ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
@@ -300,6 +301,15 @@ impl Clone for PgRelation {
 }
 
 impl FromDatum for PgRelation {
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

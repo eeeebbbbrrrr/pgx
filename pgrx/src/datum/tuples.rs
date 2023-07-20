@@ -7,7 +7,7 @@
 //LICENSE All rights reserved.
 //LICENSE
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
-use crate::{pg_sys, FromDatum, IntoDatum};
+use crate::{pg_sys, FromDatum, IntoDatum, TryFromDatumError};
 
 impl<A, B> IntoDatum for (Option<A>, Option<B>)
 where
@@ -45,6 +45,18 @@ where
     A: FromDatum + IntoDatum,
     B: FromDatum + IntoDatum,
 {
+    type SpiSafe = (Option<A::SpiSafe>, Option<B::SpiSafe>);
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok((
+            self.0.map(|v| v.to_spi_safe()).transpose()?,
+            self.1.map(|v| v.to_spi_safe()).transpose()?,
+        ))
+    }
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,
@@ -80,6 +92,19 @@ where
     B: FromDatum + IntoDatum,
     C: FromDatum + IntoDatum,
 {
+    type SpiSafe = (Option<A::SpiSafe>, Option<B::SpiSafe>, Option<C::SpiSafe>);
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok((
+            self.0.map(|v| v.to_spi_safe()).transpose()?,
+            self.1.map(|v| v.to_spi_safe()).transpose()?,
+            self.2.map(|v| v.to_spi_safe()).transpose()?,
+        ))
+    }
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

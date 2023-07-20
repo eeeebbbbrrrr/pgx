@@ -7,7 +7,7 @@
 //LICENSE All rights reserved.
 //LICENSE
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
-use crate::{pg_sys, FromDatum, IntoDatum, PgMemoryContexts};
+use crate::{pg_sys, FromDatum, IntoDatum, PgMemoryContexts, TryFromDatumError};
 use pgrx_sql_entity_graph::metadata::{
     ArgumentError, Returns, ReturnsError, SqlMapping, SqlTranslatable,
 };
@@ -160,6 +160,15 @@ impl From<Option<pg_sys::Datum>> for Internal {
 }
 
 impl FromDatum for Internal {
+    type SpiSafe = ();
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Err(TryFromDatumError::NotSpiSafe)
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

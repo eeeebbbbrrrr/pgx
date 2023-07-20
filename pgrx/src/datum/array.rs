@@ -11,7 +11,7 @@ use crate::array::RawArray;
 use crate::datum::array::casper::ChaChaSlide;
 use crate::layout::*;
 use crate::toast::Toast;
-use crate::{pg_sys, FromDatum, IntoDatum, PgMemoryContexts};
+use crate::{pg_sys, FromDatum, IntoDatum, PgMemoryContexts, TryFromDatumError};
 use bitvec::slice::BitSlice;
 use core::fmt::{Debug, Formatter};
 use core::ops::DerefMut;
@@ -682,6 +682,15 @@ impl<'a, T: FromDatum> ExactSizeIterator for ArrayIntoIterator<'a, T> {}
 impl<'a, T: FromDatum> core::iter::FusedIterator for ArrayIntoIterator<'a, T> {}
 
 impl<'a, T: FromDatum> FromDatum for VariadicArray<'a, T> {
+    type SpiSafe = Vec<Option<T>>;
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok(Vec::from_iter(self))
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -693,6 +702,15 @@ impl<'a, T: FromDatum> FromDatum for VariadicArray<'a, T> {
 }
 
 impl<'a, T: FromDatum> FromDatum for Array<'a, T> {
+    type SpiSafe = Vec<Option<T>>;
+
+    fn to_spi_safe(self) -> Result<Self::SpiSafe, TryFromDatumError>
+    where
+        Self: Sized,
+    {
+        Ok(Vec::from_iter(self))
+    }
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -744,6 +762,8 @@ impl<T: IntoDatum + FromDatum> IntoDatum for Array<'_, T> {
 }
 
 impl<T: FromDatum> FromDatum for Vec<T> {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
@@ -773,6 +793,8 @@ impl<T: FromDatum> FromDatum for Vec<T> {
 }
 
 impl<T: FromDatum> FromDatum for Vec<Option<T>> {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,

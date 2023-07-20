@@ -104,6 +104,8 @@ impl IntoDatum for TimestampWithTimeZone {
 }
 
 impl FromDatum for TimestampWithTimeZone {
+    type SpiSafe = Self;
+
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
         is_null: bool,

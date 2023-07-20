@@ -81,6 +81,8 @@ impl TryFrom<pg_sys::Datum> for Time {
 }
 
 impl FromDatum for Time {
+    type SpiSafe = Self;
+
     #[inline]
     unsafe fn from_polymorphic_datum(
         datum: pg_sys::Datum,
