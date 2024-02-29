@@ -343,7 +343,7 @@ This list gets passed into the binary, which dynamically loads the code using so
 ```rust
 let mut entities = Vec::default();
 // We *must* use this or the extension might not link in.
-let control_file = __pgrx_marker()?;
+let control_file = pgrx_sql_entity_graph::ControlFile { ... };
 entities.push(SqlGraphEntity::ExtensionRoot(control_file));
 unsafe {
     let lib = libloading::os::unix::Library::this();

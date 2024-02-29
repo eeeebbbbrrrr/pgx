@@ -403,14 +403,16 @@ pub(crate) fn generate_schema(
             })
             .wrap_err_with(|| format!("Couldn't libload {}", lib_so.display()))?;
 
-        let symbol: libloading::os::unix::Symbol<
-            unsafe extern "Rust" fn(_: ()) -> pgrx_sql_entity_graph::ControlFile,
-        > = lib
-            .get("__pgrx_marker".as_bytes())
-            .expect("Couldn't call __pgrx_marker");
-        let control_file_entity = pgrx_sql_entity_graph::SqlGraphEntity::ExtensionRoot(
-            symbol(()),
-        );
+        let control_file = pgrx_sql_entity_graph::ControlFile {
+            comment: get_property(&package_manifest_path, "comment")?.unwrap_or_default(),
+            default_version: get_property(&package_manifest_path, "default_version")?.unwrap_or_default(),
+            module_pathname: get_property(&package_manifest_path, "module_pathname")?,
+            relocatable: get_property(&package_manifest_path, "relocatable")?.unwrap_or_default() == "true",
+            superuser: get_property(&package_manifest_path, "superuser")?.unwrap_or_default() == "true",
+            schema: get_property(&package_manifest_path, "schema")?,
+        };
+        let control_file_entity = pgrx_sql_entity_graph::SqlGraphEntity::ExtensionRoot(control_file);
+
         entities.push(control_file_entity);
 
         for symbol_to_call in fns_to_call {
