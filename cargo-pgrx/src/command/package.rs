@@ -60,8 +60,8 @@ impl Package {
 
         let pg_config = match self.pg_config {
             None => PgConfig::from_path(),
-            Some(config) => PgConfig::new_with_defaults(config),
-        };
+            Some(config) => PgConfig::new(config),
+        }?;
         let pg_version = format!("pg{}", pg_config.major_version()?);
 
         crate::manifest::modify_features_for_version(

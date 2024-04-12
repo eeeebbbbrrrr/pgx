@@ -77,7 +77,7 @@ impl CommandExecute for PgrxTarget {
 #[tracing::instrument(level = "error")]
 fn make_target_info(cmd: &PgrxTarget, tmp: &Path) -> Result<()> {
     let pg_config_path = cmd.pg_config.clone().unwrap_or_else(|| "pg_config".into()).to_owned();
-    let pg_config = PgConfig::new_with_defaults(pg_config_path.clone());
+    let pg_config = PgConfig::new(pg_config_path.clone())?;
 
     let major_version = pg_config.major_version()?;
     if let Some(expected_pg_version) = cmd.pg_version {

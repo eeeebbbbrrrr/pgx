@@ -135,7 +135,7 @@ impl CommandExecute for Init {
                         .wrap_err_with(|| format!("{pgver} is not a known Postgres version"))?
                         .clone()
                 } else {
-                    let config = PgConfig::new_with_defaults(pg_config_path.as_str().into());
+                    let config = PgConfig::new(&pg_config_path)?;
                     let label = config.label().ok();
                     // We allow None in case it's configured via the environment or something.
                     if label.is_some() && label.as_deref() != Some(pgver) {
@@ -418,7 +418,7 @@ fn configure_postgres(pg_config: &PgConfig, pgdir: &Path, init: &Init) -> eyre::
     command
         .env("CPPFLAGS", existing_cppflags)
         .arg(format!("--prefix={}", get_pg_installdir(pgdir).display()))
-        .arg(format!("--with-pgport={}", pg_config.port()?))
+        .arg(format!("--with-pgport={}", pg_config.port()))
         .arg("--enable-debug")
         .arg("--enable-cassert");
     for flag in init.configure_flag.iter() {
@@ -520,7 +520,7 @@ fn make_install_postgres(version: &PgConfig, pgdir: &Path, init: &Init) -> eyre:
         let mut pg_config = get_pg_installdir(pgdir);
         pg_config.push("bin");
         pg_config.push("pg_config");
-        Ok(PgConfig::new_with_defaults(pg_config))
+        Ok(PgConfig::new(pg_config)?)
     } else {
         Err(eyre!(
             "{}\n{}{}",

@@ -15,7 +15,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::fmt::{self, Debug, Display, Formatter};
 use std::io::ErrorKind;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 use thiserror::Error;
@@ -114,8 +114,7 @@ pub struct PgConfig {
     version: Option<PgVersion>,
     pg_config: Option<PathBuf>,
     known_props: Option<BTreeMap<String, String>>,
-    base_port: u16,
-    base_testing_port: u16,
+    port: u16,
 }
 
 impl Display for PgConfig {
@@ -124,49 +123,58 @@ impl Display for PgConfig {
     }
 }
 
-impl Default for PgConfig {
-    fn default() -> Self {
-        PgConfig {
-            version: None,
-            pg_config: None,
-            known_props: None,
-            base_port: BASE_POSTGRES_PORT_NO,
-            base_testing_port: BASE_POSTGRES_TESTING_PORT_NO,
-        }
-    }
-}
-
 impl From<PgVersion> for PgConfig {
     fn from(version: PgVersion) -> Self {
-        PgConfig { version: Some(version), pg_config: None, ..Default::default() }
+        let majorver = version.major;
+        PgConfig {
+            version: Some(version),
+            pg_config: None,
+            known_props: None,
+            port: BASE_POSTGRES_PORT_NO + majorver,
+        }
     }
 }
 
 impl PgConfig {
-    pub fn new(pg_config: PathBuf, base_port: u16, base_testing_port: u16) -> Self {
+    pub fn new<P: AsRef<Path>>(pg_config: P) -> eyre::Result<Self> {
+        let mut pg_config = PgConfig {
+            version: None,
+            pg_config: Some(pg_config.as_ref().to_path_buf()),
+            known_props: None,
+            port: 0, // we'll fix the port number below -- we need the major version to figure it out
+        };
+
+        pg_config.set_port(BASE_POSTGRES_PORT_NO + pg_config.major_version()?);
+
+        Ok(pg_config)
+    }
+
+    pub fn new_for_testing<P: AsRef<Path>>(pg_config: P) -> eyre::Result<Self> {
+        let mut pg_config = PgConfig {
+            version: None,
+            pg_config: Some(pg_config.as_ref().to_path_buf()),
+            known_props: None,
+            port: 0, // we'll fix the port number below -- we need the major version to figure it out
+        };
+
+        pg_config.set_port(BASE_POSTGRES_TESTING_PORT_NO + pg_config.major_version()?);
+
+        Ok(pg_config)
+    }
+
+    pub fn with_port<P: AsRef<Path>>(pg_config: P, port: u16) -> Self {
         PgConfig {
             version: None,
-            pg_config: Some(pg_config),
+            pg_config: Some(pg_config.as_ref().to_path_buf()),
             known_props: None,
-            base_port,
-            base_testing_port,
+            port,
         }
     }
 
-    pub fn new_with_defaults(pg_config: PathBuf) -> Self {
-        PgConfig {
-            version: None,
-            pg_config: Some(pg_config),
-            known_props: None,
-            base_port: BASE_POSTGRES_PORT_NO,
-            base_testing_port: BASE_POSTGRES_TESTING_PORT_NO,
-        }
-    }
-
-    pub fn from_path() -> Self {
+    pub fn from_path() -> eyre::Result<Self> {
         let path =
             pathsearch::find_executable_in_path("pg_config").unwrap_or_else(|| "pg_config".into());
-        Self::new_with_defaults(path)
+        Self::new(path)
     }
 
     /// Construct a new [`PgConfig`] from the set of environment variables that are prefixed with
@@ -187,13 +195,7 @@ impl PgConfig {
                 known_props.insert(prop, v);
             }
 
-            Ok(Self {
-                version: None,
-                pg_config: None,
-                known_props: Some(known_props),
-                base_port: 0,
-                base_testing_port: 0,
-            })
+            Ok(Self { version: None, pg_config: None, known_props: Some(known_props), port: 0 })
         }
     }
 
@@ -307,12 +309,12 @@ impl PgConfig {
         }
     }
 
-    pub fn port(&self) -> eyre::Result<u16> {
-        Ok(self.base_port + self.major_version()?)
+    pub fn set_port(&mut self, port: u16) {
+        self.port = port
     }
 
-    pub fn test_port(&self) -> eyre::Result<u16> {
-        Ok(self.base_testing_port + self.major_version()?)
+    pub fn port(&self) -> u16 {
+        self.port
     }
 
     pub fn host(&self) -> &'static str {
@@ -452,17 +454,11 @@ impl PgConfig {
 #[derive(Debug)]
 pub struct Pgrx {
     pg_configs: Vec<PgConfig>,
-    base_port: u16,
-    base_testing_port: u16,
 }
 
 impl Default for Pgrx {
     fn default() -> Self {
-        Self {
-            pg_configs: vec![],
-            base_port: BASE_POSTGRES_PORT_NO,
-            base_testing_port: BASE_POSTGRES_TESTING_PORT_NO,
-        }
+        Self { pg_configs: vec![] }
     }
 }
 
@@ -517,8 +513,8 @@ impl From<PgrxHomeError> for std::io::Error {
 }
 
 impl Pgrx {
-    pub fn new(base_port: u16, base_testing_port: u16) -> Self {
-        Pgrx { pg_configs: vec![], base_port, base_testing_port }
+    pub fn new() -> Self {
+        Pgrx { pg_configs: vec![] }
     }
 
     pub fn from_config() -> eyre::Result<Self> {
@@ -526,7 +522,7 @@ impl Pgrx {
             Ok(pg_config) => {
                 // we have an environment variable that tells us the pg_config to use
                 let mut pgrx = Pgrx::default();
-                pgrx.push(PgConfig::new(pg_config.into(), pgrx.base_port, pgrx.base_testing_port));
+                pgrx.push(PgConfig::new(pg_config)?);
                 Ok(pgrx)
             }
             Err(_) => {
@@ -542,13 +538,10 @@ impl Pgrx {
 
                 match toml::from_str::<ConfigToml>(&std::fs::read_to_string(&path)?) {
                     Ok(configs) => {
-                        let mut pgrx = Pgrx::new(
-                            configs.base_port.unwrap_or(BASE_POSTGRES_PORT_NO),
-                            configs.base_testing_port.unwrap_or(BASE_POSTGRES_TESTING_PORT_NO),
-                        );
+                        let mut pgrx = Pgrx::new();
 
                         for (_, v) in configs.configs {
-                            pgrx.push(PgConfig::new(v, pgrx.base_port, pgrx.base_testing_port));
+                            pgrx.push(PgConfig::new(v)?);
                         }
                         Ok(pgrx)
                     }
@@ -670,12 +663,7 @@ pub fn is_supported_major_version(v: u16) -> bool {
     SUPPORTED_VERSIONS().into_iter().any(|pgver| pgver.major == v)
 }
 
-pub fn createdb(
-    pg_config: &PgConfig,
-    dbname: &str,
-    is_test: bool,
-    if_not_exists: bool,
-) -> eyre::Result<bool> {
+pub fn createdb(pg_config: &PgConfig, dbname: &str, if_not_exists: bool) -> eyre::Result<bool> {
     if if_not_exists && does_db_exist(pg_config, dbname)? {
         return Ok(false);
     }
@@ -690,11 +678,7 @@ pub fn createdb(
         .arg("-h")
         .arg(pg_config.host())
         .arg("-p")
-        .arg(if is_test {
-            pg_config.test_port()?.to_string()
-        } else {
-            pg_config.port()?.to_string()
-        })
+        .arg(pg_config.port().to_string())
         .arg(dbname)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -731,7 +715,7 @@ fn does_db_exist(pg_config: &PgConfig, dbname: &str) -> eyre::Result<bool> {
         .arg("-h")
         .arg(pg_config.host())
         .arg("-p")
-        .arg(pg_config.port()?.to_string())
+        .arg(pg_config.port().to_string())
         .arg("template1")
         .arg("-c")
         .arg(&format!(

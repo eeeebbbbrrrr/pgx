@@ -8,11 +8,12 @@
 //LICENSE
 //LICENSE Use of this source code is governed by the MIT license that can be found in the LICENSE file.
 use eyre::Context;
+use owo_colors::OwoColorize;
 use pgrx_pg_config::{get_target_dir, PgConfig, Pgrx};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
+use std::process::{Command, Stdio};
 
-use crate::manifest::{get_package_manifest, pg_config_and_version};
+use crate::manifest::{get_package_manifest, pg_config_and_version, PgVersionSource};
 use crate::profile::CargoProfile;
 use crate::CommandExecute;
 
@@ -40,10 +41,64 @@ pub(crate) struct Test {
     /// Don't regenerate the schema
     #[clap(long, short)]
     no_schema: bool,
+    /// The `pg_config` path (default is first in $PATH)
+    #[clap(long, short = 'c')]
+    pg_config: Option<String>,
+    /// Use `sudo` to install the extension artifacts
+    #[clap(long, short = 's')]
+    sudo: bool,
     #[clap(flatten)]
     features: clap_cargo::Features,
     #[clap(from_global, action = clap::ArgAction::Count)]
     verbose: u8,
+
+    #[clap(flatten)]
+    conninfo: ConnInfo,
+}
+
+#[derive(clap::Args, Debug, Clone)]
+#[clap(author)]
+struct ConnInfo {
+    /// Use a Postgres instance on a different host.  Requires `--pg-config`
+    #[clap(long)]
+    pghost: Option<String>,
+
+    /// Use a Postgres instance on a different port.  Requires `--pg-config`
+    #[clap(long)]
+    pgport: Option<u16>,
+
+    /// Use a different Postgres user.  Requires `--pg-config`
+    #[clap(long)]
+    pguser: Option<String>,
+
+    /// Use a different database name for running tests.  Requires `--pg-config`
+    #[clap(long)]
+    pgdatabase: Option<String>,
+}
+
+impl ConnInfo {
+    fn is_fully_set(&self) -> bool {
+        self.pghost.is_some()
+            && self.pgport.is_some()
+            && self.pguser.is_some()
+            && self.pgdatabase.is_some()
+    }
+
+    fn is_partially_set(&self) -> bool {
+        self.pghost.is_some()
+            || self.pgport.is_some()
+            || self.pguser.is_some()
+            || self.pgdatabase.is_some()
+    }
+
+    fn apply_envars(&self, command: &mut Command) {
+        if self.is_fully_set() {
+            command.env("CARGO_PGRX_TEST_PGHOST", self.pghost.as_ref().unwrap());
+            command.env("CARGO_PGRX_TEST_PGPORT", self.pgport.as_ref().unwrap().to_string());
+            command.env("CARGO_PGRX_TEST_PGUSER", self.pguser.as_ref().unwrap());
+            command.env("CARGO_PGRX_TEST_PGDATABASE", self.pgdatabase.as_ref().unwrap());
+        }
+    }
 }
 
 impl CommandExecute for Test {
@@ -54,18 +109,35 @@ impl CommandExecute for Test {
             let mut features = me.features.clone();
             let (package_manifest, _package_manifest_path) =
                 get_package_manifest(&me.features, me.package.as_ref(), me.manifest_path.as_ref())?;
-            let (pg_config, _pg_version) = pg_config_and_version(
-                pgrx,
-                &package_manifest,
-                me.pg_version.clone(),
-                Some(&mut features),
-                true,
-            )?;
+            let pg_config = match me.pg_config {
+                None => {
+                    if me.conninfo.is_partially_set() {
+                        panic!("{}:  Must specify `--pg-config=...` in order to use the `--pghost/port/user/database` options", "ERROR".red())
+                    }
+                    pg_config_and_version(
+                        pgrx,
+                        &package_manifest,
+                        me.pg_version.clone(),
+                        Some(&mut features),
+                        true,
+                    )?
+                    .0
+                }
+                Some(config) => PgConfig::new(PathBuf::from(config))?,
+            };
+            let pg_version = format!("pg{}", pg_config.major_version()?);
 
             let profile = CargoProfile::from_flags(
                 me.profile.as_deref(),
                 if me.release { CargoProfile::Release } else { CargoProfile::Dev },
             )?;
+            crate::manifest::modify_features_for_version(
+                &Pgrx::from_config()?,
+                Some(&mut features),
+                &package_manifest,
+                &PgVersionSource::PgConfig(pg_version),
+                true,
+            );
 
             test_extension(
                 &pg_config,
@@ -75,6 +147,8 @@ impl CommandExecute for Test {
                 me.no_schema,
                 &features,
                 me.testname,
+                me.sudo,
+                me.conninfo,
             )?;
 
             Ok(())
@@ -103,7 +177,6 @@ impl CommandExecute for Test {
 }
 
 #[tracing::instrument(skip_all, fields(
-    pg_version = %pg_config.version()?,
     testname =  tracing::field::Empty,
     ?profile,
 ))]
@@ -115,6 +188,8 @@ pub fn test_extension(
     no_schema: bool,
     features: &clap_cargo::Features,
     testname: Option<impl AsRef<str>>,
+    sudo: bool,
+    conninfo: ConnInfo,
 ) -> eyre::Result<()> {
     if let Some(ref testname) = testname {
         tracing::Span::current().record("testname", &tracing::field::display(&testname.as_ref()));
@@ -139,6 +214,17 @@ pub fn test_extension(
         .env("PGRX_ALL_FEATURES", if features.all_features { "true" } else { "false" })
         .env("PGRX_BUILD_PROFILE", profile.name())
         .env("PGRX_NO_SCHEMA", if no_schema { "true" } else { "false" });
+
+    conninfo.apply_envars(&mut command);
+
+    command.env(
+        "CARGO_PGRX_TEST_PG_CONFIG",
+        pg_config.path().unwrap_or_else(|| panic!("No `pg_config` path")),
+    );
+
+    if sudo {
+        command.env("CARGO_PGRX_TEST_SUDO", "true");
+    }
 
     if let Ok(rust_log) = std::env::var("RUST_LOG") {
         command.env("RUST_LOG", rust_log);

@@ -124,7 +124,7 @@ pub(crate) fn run(
     start_postgres(pg_config)?;
 
     // create the named database
-    if !createdb(pg_config, dbname, false, true)? {
+    if !createdb(pg_config, dbname, false)? {
         println!("{} existing database {}", "    Re-using".bold().cyan(), dbname);
     }
 
@@ -147,7 +147,7 @@ pub(crate) fn exec_psql(pg_config: &PgConfig, dbname: &str, pgcli: bool) -> eyre
         .arg("-h")
         .arg(pg_config.host())
         .arg("-p")
-        .arg(pg_config.port()?.to_string())
+        .arg(pg_config.port().to_string())
         .arg(dbname);
 
     // we'll never return from here as we've now become psql

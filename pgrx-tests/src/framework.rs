@@ -188,6 +188,15 @@ fn format_loglines(session_id: &str, loglines: &LogLines) -> String {
     result
 }
 
+/// If none of the `CARGO_PGRX_TEST_PGxxx` envars are set, then we'll want to initialize and start
+/// our own Postgres instance
+fn use_pgrx_managed_database() -> bool {
+    std::env::var("CARGO_PGRX_TEST_PGHOST").is_err()
+        && std::env::var("CARGO_PGRX_TEST_PGPORT").is_err()
+        && std::env::var("CARGO_PGRX_TEST_PGUSER").is_err()
+        && std::env::var("CARGO_PGRX_TEST_PGDATABASE").is_err()
+}
+
 fn initialize_test_framework(
     postgresql_conf: Vec<&'static str>,
 ) -> eyre::Result<(LogLines, String)> {
@@ -212,13 +221,19 @@ fn initialize_test_framework(
     if !state.installed {
         shutdown::register_shutdown_hook();
         install_extension()?;
-        initdb(postgresql_conf)?;
 
-        let system_session_id = start_pg(state.loglines.clone())?;
+        let system_session_id = if use_pgrx_managed_database() {
+            initdb(postgresql_conf)?;
+            start_pg(state.loglines.clone())?
+        } else {
+            "<remote host>".to_string()
+        };
+
         let pg_config = get_pg_config()?;
         dropdb()?;
-        createdb(&pg_config, get_pg_dbname(), true, false)?;
+        createdb(&pg_config, &get_pg_dbname(), true)?;
         create_extension()?;
+
         state.installed = true;
         state.system_session_id = system_session_id;
     }
@@ -227,28 +242,38 @@ fn initialize_test_framework(
 }
 
 fn get_pg_config() -> eyre::Result<PgConfig> {
-    let pgrx = Pgrx::from_config().wrap_err("Unable to get PGRX from config")?;
+    match std::env::var("CARGO_PGRX_TEST_PG_CONFIG") {
+        Ok(path) => {
+            let path = PathBuf::from(path);
+            std::env::var("CARGO_PGRX_TEST_PGPORT")
+                .map(|v| Ok(PgConfig::with_port(&path, v.parse::<u16>()?)))
+                .unwrap_or_else(|_| PgConfig::new_for_testing(&path))
+        }
+        Err(_) => {
+            let pgrx = Pgrx::from_config().wrap_err("Unable to get PGRX from config")?;
 
-    let pg_version = pg_sys::get_pg_major_version_num();
+            let pg_version = pg_sys::get_pg_major_version_num();
 
-    let pg_config = pgrx
-        .get(&format!("pg{pg_version}"))
-        .wrap_err_with(|| {
-            format!("Error getting pg_config: {pg_version} is not a valid postgres version")
-        })
-        .unwrap()
-        .clone();
+            let pg_config = pgrx
+                .get(&format!("pg{pg_version}"))
+                .wrap_err_with(|| {
+                    format!("Error getting pg_config: {pg_version} is not a valid postgres version")
+                })
+                .unwrap()
+                .clone();
 
-    Ok(pg_config)
+            Ok(pg_config)
+        }
+    }
 }
 
 pub fn client() -> eyre::Result<(postgres::Client, String)> {
     let pg_config = get_pg_config()?;
     let mut client = postgres::Config::new()
-        .host(pg_config.host())
-        .port(pg_config.test_port().expect("unable to determine test port"))
+        .host(&get_pg_host(&pg_config))
+        .port(get_pg_port(&pg_config).expect("unable to determine test port"))
         .user(&get_pg_user())
-        .dbname(get_pg_dbname())
+        .dbname(&get_pg_dbname())
         .connect(postgres::NoTls)
         .wrap_err("Error connecting to Postgres")?;
 
@@ -282,6 +307,10 @@ pub fn client() -> eyre::Result<(postgres::Client, String)> {
     Ok((client, session_id))
 }
 
+fn is_sudo() -> bool {
+    std::env::var("CARGO_PGRX_TEST_SUDO") == Ok(String::from("true"))
+}
+
 fn install_extension() -> eyre::Result<()> {
     eprintln!("installing extension");
     let profile = std::env::var("PGRX_BUILD_PROFILE").unwrap_or("debug".into());
@@ -297,9 +326,7 @@ fn install_extension() -> eyre::Result<()> {
         std::env::var("PGRX_NO_DEFAULT_FEATURES").unwrap_or("false".to_string()) == "true";
     let all_features = std::env::var("PGRX_ALL_FEATURES").unwrap_or("false".to_string()) == "true";
 
-    let pg_version = format!("pg{}", pg_sys::get_pg_major_version_string());
-    let pgrx = Pgrx::from_config()?;
-    let pg_config = pgrx.get(&pg_version)?;
+    let pg_config = get_pg_config()?;
     let cargo_test_args = get_cargo_test_features()?;
     println!("detected cargo args: {cargo_test_args:?}");
 
@@ -314,6 +341,9 @@ fn install_extension() -> eyre::Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .env("CARGO_TARGET_DIR", get_target_dir()?);
+    if is_sudo() {
+        command.arg("--sudo");
+    }
 
     if let Ok(manifest_path) = std::env::var("PGRX_MANIFEST_PATH") {
         command.arg("--manifest-path");
@@ -478,7 +508,7 @@ fn start_pg(loglines: LogLines) -> eyre::Result<String> {
         .arg("-h")
         .arg(pg_config.host())
         .arg("-p")
-        .arg(pg_config.test_port().expect("unable to determine test port").to_string())
+        .arg(pg_config.port().to_string())
         // Redirecting logs to files can hang the test framework, override it
         .args(["-c", "log_destination=stderr", "-c", "logging_collector=off"])
         .stdout(Stdio::inherit())
@@ -606,9 +636,9 @@ fn dropdb() -> eyre::Result<()> {
         .env_remove("PGUSER")
         .arg("--if-exists")
         .arg("-h")
-        .arg(pg_config.host())
+        .arg(get_pg_host(&pg_config))
         .arg("-p")
-        .arg(pg_config.test_port().expect("unable to determine test port").to_string())
+        .arg(get_pg_port(&pg_config).expect("unable to determine test port").to_string())
         .arg(get_pg_dbname())
         .output()
         .unwrap();
@@ -673,13 +703,25 @@ fn get_pid_file() -> eyre::Result<PathBuf> {
     Ok(pgdata)
 }
 
-pub(crate) fn get_pg_dbname() -> &'static str {
-    "pgrx_tests"
+fn get_pg_host(pg_config: &PgConfig) -> String {
+    std::env::var("CARGO_PGRX_TEST_PGHOST").unwrap_or(pg_config.host().to_string())
+}
+
+fn get_pg_port(pg_config: &PgConfig) -> eyre::Result<u16> {
+    std::env::var("CARGO_PGRX_TEST_PGPORT")
+        .map(|v| v.parse().wrap_err("port number is not a `u16`"))
+        .unwrap_or(Ok(pg_config.port()))
+}
+
+pub(crate) fn get_pg_dbname() -> String {
+    std::env::var("CARGO_PGRX_TEST_PGDATABASE").unwrap_or("pgrx_tests".to_string())
 }
 
 pub(crate) fn get_pg_user() -> String {
-    std::env::var("USER")
-        .unwrap_or_else(|_| panic!("USER environment var is unset or invalid UTF-8"))
+    std::env::var("CARGO_PGRX_TEST_PGUSER").unwrap_or_else(|_| {
+        std::env::var("USER")
+            .unwrap_or_else(|_| panic!("USER environment var is unset or invalid UTF-8"))
+    })
 }
 
 pub fn get_named_capture(
